@@ -30,9 +30,8 @@ Features:
   warns if you enlarge it far enough to look pixelated.
 * Drag-to-reposition: drag the image in the preview to choose exactly what
   shows in each slot.
-* Optional bleed and crop / cut marks, with black, white, or no cut lines.
-* Live preview with two modes: assembled (see the reassembled picture) and
-  per-card (see each print tile with its bleed margin and crop marks).
+* Optional crop / cut marks, with black, white, or no cut lines.
+* Live per-card preview: see each print tile with its cut line and crop marks.
 * Prints at exact physical size via your browser's print dialog.
 
 Privacy: all image processing happens in the visitor's browser. No image is

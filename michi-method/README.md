@@ -66,7 +66,7 @@ Add to any page/post:
 - Or insert the **Michi Method Printer** block.
 
 Shortcode attributes (all optional): `cols`, `rows`, `card_width`,
-`card_height`, `bleed`, `vgap`, `hgap`, `crop_marks`, `mark_color`, `units`.
+`card_height`, `vgap`, `hgap`, `crop_marks`, `mark_color`, `units`.
 Example:
 
 ```

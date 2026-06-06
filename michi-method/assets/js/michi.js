@@ -100,7 +100,6 @@
 			rows: parseInt(root.getAttribute('data-default-rows'), 10) || 1,
 			cardWidthMm: parseFloat(root.getAttribute('data-card-width-mm')) || 63,
 			cardHeightMm: parseFloat(root.getAttribute('data-card-height-mm')) || 88,
-			bleedMm: parseFloat(root.getAttribute('data-default-bleed-mm')) || 0,
 			vGapMm: parseFloat(root.getAttribute('data-vgap-mm')) || 0, // vertical seam (between columns)
 			hGapMm: parseFloat(root.getAttribute('data-hgap-mm')) || 0, // horizontal seam (between rows)
 			cropMarks: root.getAttribute('data-crop-marks') === 'true',
@@ -355,14 +354,6 @@
 		);
 		controls.appendChild(this.customSizeField);
 
-		// Bleed.
-		this.bleedInput = el('input', { type: 'number', step: 'any', min: '0', class: 'mm-num' });
-		this.bleedInput.addEventListener('input', function () {
-			self.state.bleedMm = Math.max(0, self.fromDisplay(self.bleedInput.value));
-			self.renderPreview();
-		});
-		controls.appendChild(this.field('Bleed (mm, extra to trim)', this.bleedInput));
-
 		// Seam gaps: the dead strip between pocket windows. Used so a piece that
 		// spans multiple pockets stays visually continuous across the divider.
 		this.vGapInput = el('input', { type: 'number', step: 'any', min: '0', class: 'mm-num' });
@@ -549,7 +540,6 @@
 		this.customSizeField.style.display = this.state.cardPreset === 'custom' ? '' : 'none';
 		this.cardWInput.value = this.toDisplay(this.state.cardWidthMm);
 		this.cardHInput.value = this.toDisplay(this.state.cardHeightMm);
-		this.bleedInput.value = this.toDisplay(this.state.bleedMm);
 		this.vGapInput.value = this.toDisplay(this.state.vGapMm);
 		this.hGapInput.value = this.toDisplay(this.state.hGapMm);
 		var unitLabel = this.state.units;
@@ -932,13 +922,7 @@
 	MichiApp.prototype.renderAssembledPreview = function (canvas) {
 		var s = this.state;
 		var art = this.artSizeMm();
-		var bleed = s.bleedMm;
-
-		// The preview shows the full printed extent: the trim area plus the
-		// outer bleed margin, so the bleed setting is actually visible.
-		var outerW = art.w + 2 * bleed;
-		var outerH = art.h + 2 * bleed;
-		var outerAspect = outerW / outerH;
+		var outerAspect = art.w / art.h;
 
 		var maxW = Math.min(this.previewWrap.clientWidth || 480, 560);
 		if (maxW < 200) {
@@ -962,15 +946,14 @@
 		ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 		ctx.clearRect(0, 0, viewW, viewH);
 
-		var scale = viewW / outerW; // preview px per mm
+		var scale = viewW / art.w; // preview px per mm
 		this._previewPxPerMm = scale;
-		var bleedPx = bleed * scale;
 		var cellW = s.cardWidthMm * scale;
 		var cellH = s.cardHeightMm * scale;
 		var vGapPx = s.vGapMm * scale;
 		var hGapPx = s.hGapMm * scale;
-		var ox = bleedPx; // trim-area origin within the canvas
-		var oy = bleedPx;
+		var ox = 0; // trim-area origin within the canvas
+		var oy = 0;
 
 		// Remember the layout so pointer events can map to pocket indices.
 		this._previewLayout = {
@@ -1057,20 +1040,6 @@
 
 		var list = this.pieces();
 
-		// Shade the bleed ring (trimmed off) around each piece in translucent red.
-		if (bleedPx > 0.5) {
-			ctx.save();
-			ctx.fillStyle = 'rgba(220,38,38,0.16)';
-			list.forEach(function (p) {
-				var r = pieceRectPx(p);
-				ctx.beginPath();
-				ctx.rect(r.x - bleedPx, r.y - bleedPx, r.w + 2 * bleedPx, r.h + 2 * bleedPx);
-				ctx.rect(r.x, r.y, r.w, r.h);
-				ctx.fill('evenodd');
-			});
-			ctx.restore();
-		}
-
 		// Solid cut / trim lines: the outer boundary of each piece (no internal
 		// lines inside a spanning piece, since you do not cut there).
 		if (this.marksVisible()) {
@@ -1095,22 +1064,12 @@
 			ctx.strokeRect(sr.x + 1, sr.y + 1, sr.w - 2, sr.h - 2);
 			ctx.restore();
 		}
-
-		// Dashed outline of the full printed extent (trim + bleed).
-		if (bleedPx > 0.5) {
-			ctx.save();
-			ctx.setLineDash([4, 3]);
-			ctx.strokeStyle = 'rgba(220,38,38,0.9)';
-			ctx.lineWidth = 1;
-			ctx.strokeRect(0.5, 0.5, viewW - 1, viewH - 1);
-			ctx.restore();
-		}
 	};
 
 	/**
-	 * Exploded preview: each card is drawn as its own print tile (with bleed
-	 * margin and, if enabled, crop marks) separated by gaps, mirroring what
-	 * actually comes out of the printer.
+	 * Exploded preview: each card is drawn as its own print tile (with, if
+	 * enabled, crop marks) separated by gaps, mirroring what actually comes
+	 * out of the printer.
 	 */
 	MichiApp.prototype.renderExplodedPreview = function (canvas) {
 		var s = this.state;
@@ -1118,8 +1077,8 @@
 
 		// Lay pieces out in a greedy wrapping flow, since spanning pieces have
 		// varying sizes and no longer fit a uniform grid.
-		var unitWmm = s.cardWidthMm + 2 * s.bleedMm + 2 * markMm;
-		var unitHmm = s.cardHeightMm + 2 * s.bleedMm + 2 * markMm;
+		var unitWmm = s.cardWidthMm + 2 * markMm;
+		var unitHmm = s.cardHeightMm + 2 * markMm;
 		var gapMm = Math.max(unitWmm, unitHmm) * 0.14;
 		var maxRowWmm = s.cols * unitWmm + Math.max(0, s.cols - 1) * gapMm;
 
@@ -1130,8 +1089,8 @@
 		var rowH = 0;
 		var totalWmm = 0;
 		list.forEach(function (p) {
-			var tw = p.wMm + 2 * s.bleedMm + 2 * markMm;
-			var th = p.hMm + 2 * s.bleedMm + 2 * markMm;
+			var tw = p.wMm + 2 * markMm;
+			var th = p.hMm + 2 * markMm;
 			if (cx > 0 && cx + tw > maxRowWmm + 0.01) {
 				cy += rowH + gapMm;
 				cx = 0;
@@ -1180,7 +1139,6 @@
 		// The exploded view is not interactive for selection.
 		this._previewLayout = null;
 		this._previewPxPerMm = scale;
-		var bleedPx = s.bleedMm * scale;
 		var markPx = markMm * scale;
 		var markLenPx = MARK_LEN_MM * scale;
 		var markColor = this.markColorHex();
@@ -1195,26 +1153,14 @@
 			var contentY = ty + markPx;
 			var cardWpx = p.wMm * scale;
 			var cardHpx = p.hMm * scale;
-			var contentW = cardWpx + 2 * bleedPx;
-			var contentH = cardHpx + 2 * bleedPx;
 
 			var pieceCanvas = this.renderPieceCanvas(p);
 			ctx.fillStyle = '#ffffff';
-			ctx.fillRect(contentX, contentY, contentW, contentH);
-			ctx.drawImage(pieceCanvas, contentX, contentY, contentW, contentH);
+			ctx.fillRect(contentX, contentY, cardWpx, cardHpx);
+			ctx.drawImage(pieceCanvas, contentX, contentY, cardWpx, cardHpx);
 
-			var cardX = contentX + bleedPx;
-			var cardY = contentY + bleedPx;
-
-			if (bleedPx > 0.5) {
-				ctx.save();
-				ctx.fillStyle = 'rgba(220,38,38,0.18)';
-				ctx.beginPath();
-				ctx.rect(contentX, contentY, contentW, contentH);
-				ctx.rect(cardX, cardY, cardWpx, cardHpx);
-				ctx.fill('evenodd');
-				ctx.restore();
-			}
+			var cardX = contentX;
+			var cardY = contentY;
 
 			// Piece boundary = the cut line (outer edge only).
 			if (showMarks) {
@@ -1276,12 +1222,11 @@
 			dH: pm.dH * PX_PER_MM
 		};
 
-		var bleedPx = s.bleedMm * PX_PER_MM;
 		var pieceWpx = piece.wMm * PX_PER_MM;
 		var pieceHpx = piece.hMm * PX_PER_MM;
 
-		var tileWpx = Math.round(pieceWpx + 2 * bleedPx);
-		var tileHpx = Math.round(pieceHpx + 2 * bleedPx);
+		var tileWpx = Math.round(pieceWpx);
+		var tileHpx = Math.round(pieceHpx);
 
 		var canvas = document.createElement('canvas');
 		canvas.width = tileWpx;
@@ -1290,9 +1235,9 @@
 		ctx.fillStyle = '#ffffff';
 		ctx.fillRect(0, 0, tileWpx, tileHpx);
 
-		// Top-left of this piece (including bleed) in art-area pixel coords.
-		var tileOriginX = piece.xMm * PX_PER_MM - bleedPx;
-		var tileOriginY = piece.yMm * PX_PER_MM - bleedPx;
+		// Top-left of this piece in art-area pixel coords.
+		var tileOriginX = piece.xMm * PX_PER_MM;
+		var tileOriginY = piece.yMm * PX_PER_MM;
 
 		// Draw the placed image into the piece's coordinate space.
 		ctx.drawImage(
@@ -1308,11 +1253,10 @@
 
 	/**
 	 * Build the 8 crop-mark tick elements for a tile, positioned at the trim
-	 * box corners (inset by bleed + the reserved mark margin).
+	 * box corners (inset by the reserved mark margin).
 	 */
 	MichiApp.prototype.buildCropMarks = function (color, trimWmm, trimHmm) {
-		var s = this.state;
-		var inset = MARK_MARGIN_MM + s.bleedMm; // distance from tile edge to trim line
+		var inset = MARK_MARGIN_MM; // distance from tile edge to trim line
 		var len = MARK_LEN_MM;
 		var marks = [];
 
@@ -1353,8 +1297,7 @@
 	 */
 	MichiApp.prototype.buildCutLine = function (color, trimWmm, trimHmm) {
 		var s = this.state;
-		var pad = s.cropMarks ? MARK_MARGIN_MM : 0;
-		var inset = pad + s.bleedMm;
+		var inset = s.cropMarks ? MARK_MARGIN_MM : 0;
 		return el('div', {
 			class: 'mm-cut-line',
 			style:
@@ -1380,14 +1323,14 @@
 		var list = this.pieces();
 		for (var i = 0; i < list.length; i++) {
 			var piece = list[i];
-			var tileOuterW = piece.wMm + 2 * s.bleedMm + 2 * pad;
-			var tileOuterH = piece.hMm + 2 * s.bleedMm + 2 * pad;
+			var tileOuterW = piece.wMm + 2 * pad;
+			var tileOuterH = piece.hMm + 2 * pad;
 
 			var canvas = this.renderPieceCanvas(piece);
 			var img = canvas; // canvas prints fine directly
 			img.className = 'mm-tile-canvas';
-			img.style.width = (piece.wMm + 2 * s.bleedMm) + 'mm';
-			img.style.height = (piece.hMm + 2 * s.bleedMm) + 'mm';
+			img.style.width = piece.wMm + 'mm';
+			img.style.height = piece.hMm + 'mm';
 			img.style.left = pad + 'mm';
 			img.style.top = pad + 'mm';
 
