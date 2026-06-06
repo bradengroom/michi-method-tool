@@ -194,17 +194,51 @@
 
 /* ---- Preview ---- */
 .mm-preview {
-	margin: 8px 0 18px;
-	padding: 12px;
-	border: 1px solid var(--mm-border);
+	margin: 0 0 18px;
 	border-radius: 12px;
-	background: #f3f4f6;
 	display: flex;
 	flex-direction: column;
 	justify-content: center;
 	align-items: center;
 	gap: 8px;
+}
+
+/* Once an image is loaded the box becomes the preview panel. */
+.michi-method.has-image .mm-preview {
+	position: relative;
+	padding: 12px;
+	border: 1px solid var(--mm-border);
+	background: #f3f4f6;
 	min-height: 120px;
+}
+
+.mm-change-btn {
+	position: absolute;
+	top: 10px;
+	right: 10px;
+	z-index: 2;
+	padding: 6px 12px;
+	border: 1px solid var(--mm-border);
+	border-radius: 8px;
+	background: #fff;
+	color: #374151;
+	font-size: 13px;
+	cursor: pointer;
+	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.mm-change-btn:hover {
+	border-color: var(--mm-accent);
+	color: var(--mm-accent);
+}
+
+/* The dropzone is the empty state and fills the combined box. */
+.mm-preview .mm-dropzone {
+	width: 100%;
+}
+
+.michi-method.has-image .mm-preview .mm-dropzone {
+	display: none;
 }
 
 .mm-preview-empty {
@@ -390,6 +424,14 @@
 .mm-actions {
 	display: flex;
 	gap: 10px;
+}
+
+.mm-when-image {
+	display: none;
+}
+
+.michi-method.has-image .mm-when-image {
+	display: inline-block;
 }
 
 .mm-print-btn {

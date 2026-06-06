@@ -198,10 +198,8 @@
 			}
 		});
 
-		this.tool.appendChild(this.dropzone);
-
-		// Controls.
-		this.tool.appendChild(this.buildControls());
+		// The dropzone and the preview share one box (appended together below):
+		// the dropzone is the empty state, the grid takes over once an image loads.
 
 		// Zoom control, kept next to the preview so it sits right by the image.
 		this.zoomInput = el('input', { type: 'range', min: '10', max: '400', step: '1', class: 'mm-range' });
@@ -243,12 +241,27 @@
 		]);
 
 		this.previewHint = el('div', { class: 'mm-preview-hint', text: 'Drag the image to reposition it within the grid.' });
+
+		// "Change image" lives in the corner of the preview box (only with an image).
+		this.changeButton = el('button', {
+			type: 'button',
+			class: 'mm-change-btn mm-when-image',
+			text: 'Change image',
+			onClick: function () {
+				self.fileInput.click();
+			}
+		});
+
 		this.previewWrap = el('div', { class: 'mm-preview' }, [
-			el('div', { class: 'mm-preview-empty', text: 'Upload an image to see a preview.' }),
+			this.dropzone,
+			this.changeButton,
 			zoomBar,
 			this.gridStage,
 			this.previewHint
 		]);
+
+		// Controls first, then the combined upload/preview box below them.
+		this.tool.appendChild(this.buildControls());
 		this.tool.appendChild(this.previewWrap);
 		this.attachDrag();
 
@@ -266,17 +279,7 @@
 				self.print();
 			}
 		});
-		this.resetButton = el('button', {
-			type: 'button',
-			class: 'mm-reset-btn',
-			text: 'Recenter image',
-			onClick: function () {
-				self.state.offsetX = 0;
-				self.state.offsetY = 0;
-				self.renderPreview();
-			}
-		});
-		this.tool.appendChild(el('div', { class: 'mm-actions' }, [this.printButton, this.resetButton]));
+		this.tool.appendChild(el('div', { class: 'mm-actions' }, [this.printButton]));
 
 		this.tool.appendChild(
 			el('div', { class: 'mm-tips' }, [
@@ -826,19 +829,13 @@
 
 	MichiApp.prototype.renderPreview = function () {
 		var canvas = this.previewCanvas;
-		var empty = this.previewWrap.querySelector('.mm-preview-empty');
 		if (!this.image) {
-			if (empty) {
-				empty.style.display = '';
-			}
+			// Empty state: the dropzone shows (CSS, based on .has-image).
 			canvas.style.display = 'none';
 			if (this.qualityEl) {
 				this.qualityEl.style.display = 'none';
 			}
 			return;
-		}
-		if (empty) {
-			empty.style.display = 'none';
 		}
 		canvas.style.display = 'block';
 
