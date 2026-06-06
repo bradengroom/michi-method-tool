@@ -110,7 +110,9 @@
 			cardHeightMm: parseFloat(root.getAttribute('data-card-height-mm')) || 88,
 			bleedMm: parseFloat(root.getAttribute('data-default-bleed-mm')) || 0,
 			cropMarks: root.getAttribute('data-crop-marks') === 'true',
-			markColor: root.getAttribute('data-mark-color') === 'white' ? 'white' : 'black',
+			markColor: (function (mc) {
+				return mc === 'white' || mc === 'none' ? mc : 'black';
+			})(root.getAttribute('data-mark-color')),
 			zoom: 1, // 1 = true size; only goes below 1 (never upscales)
 			previewMode: 'assembled',
 			offsetX: 0, // image pan within the grid, in mm (art-area coords)
@@ -125,6 +127,10 @@
 
 	MichiApp.prototype.markColorHex = function () {
 		return this.state.markColor === 'white' ? '#ffffff' : '#000000';
+	};
+
+	MichiApp.prototype.marksVisible = function () {
+		return this.state.markColor !== 'none';
 	};
 
 	MichiApp.prototype.updateZoomLabel = function () {
@@ -390,10 +396,11 @@
 		// Mark / cut-line color.
 		this.markColorSelect = el('select', { class: 'mm-select' }, [
 			el('option', { value: 'black', text: 'Black' }),
-			el('option', { value: 'white', text: 'White' })
+			el('option', { value: 'white', text: 'White' }),
+			el('option', { value: 'none', text: 'None' })
 		]);
 		this.markColorSelect.addEventListener('change', function () {
-			self.state.markColor = self.markColorSelect.value === 'white' ? 'white' : 'black';
+			self.state.markColor = self.markColorSelect.value;
 			self.renderPreview();
 		});
 		controls.appendChild(this.field('Cut line color', this.markColorSelect));
@@ -700,22 +707,24 @@
 		}
 
 		// Solid cut / trim lines (the actual card boundaries = where you cut).
-		ctx.setLineDash([]);
-		ctx.lineWidth = 1;
-		ctx.strokeStyle = this.markColorHex();
-		ctx.strokeRect(ox + 0.5, oy + 0.5, artWpx - 1, artHpx - 1);
-		ctx.beginPath();
-		for (col = 1; col < s.cols; col++) {
-			x = Math.round(ox + col * cellW) + 0.5;
-			ctx.moveTo(x, oy);
-			ctx.lineTo(x, oy + artHpx);
+		if (this.marksVisible()) {
+			ctx.setLineDash([]);
+			ctx.lineWidth = 1;
+			ctx.strokeStyle = this.markColorHex();
+			ctx.strokeRect(ox + 0.5, oy + 0.5, artWpx - 1, artHpx - 1);
+			ctx.beginPath();
+			for (col = 1; col < s.cols; col++) {
+				x = Math.round(ox + col * cellW) + 0.5;
+				ctx.moveTo(x, oy);
+				ctx.lineTo(x, oy + artHpx);
+			}
+			for (row = 1; row < s.rows; row++) {
+				y = Math.round(oy + row * cellH) + 0.5;
+				ctx.moveTo(ox, y);
+				ctx.lineTo(ox + artWpx, y);
+			}
+			ctx.stroke();
 		}
-		for (row = 1; row < s.rows; row++) {
-			y = Math.round(oy + row * cellH) + 0.5;
-			ctx.moveTo(ox, y);
-			ctx.lineTo(ox + artWpx, y);
-		}
-		ctx.stroke();
 
 		// Dashed outline of the full printed extent (trim + bleed).
 		if (bleedPx > 0.5) {
@@ -808,13 +817,16 @@
 
 				// Card boundary = the cut line.
 				var markColor = this.markColorHex();
-				ctx.setLineDash([]);
-				ctx.lineWidth = 1;
-				ctx.strokeStyle = markColor;
-				ctx.strokeRect(cardX + 0.5, cardY + 0.5, cardWpx - 1, cardHpx - 1);
+				var showMarks = this.marksVisible();
+				if (showMarks) {
+					ctx.setLineDash([]);
+					ctx.lineWidth = 1;
+					ctx.strokeStyle = markColor;
+					ctx.strokeRect(cardX + 0.5, cardY + 0.5, cardWpx - 1, cardHpx - 1);
+				}
 
 				// Crop marks: corner ticks just outside each card corner.
-				if (s.cropMarks) {
+				if (showMarks && s.cropMarks) {
 					ctx.strokeStyle = markColor;
 					ctx.lineWidth = 1;
 					ctx.beginPath();
@@ -977,10 +989,13 @@
 				img.style.left = pad + 'mm';
 				img.style.top = pad + 'mm';
 
-				// Always draw the cut line (where to cut); crop ticks are optional.
-				var children = [img, this.buildCutLine(markColor)];
-				if (s.cropMarks) {
-					children = children.concat(this.buildCropMarks(markColor));
+				// Cut line (where to cut) unless marks are disabled; crop ticks are optional.
+				var children = [img];
+				if (this.marksVisible()) {
+					children.push(this.buildCutLine(markColor));
+					if (s.cropMarks) {
+						children = children.concat(this.buildCropMarks(markColor));
+					}
 				}
 
 				var tile = el('div', {
