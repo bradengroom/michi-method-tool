@@ -101,8 +101,15 @@
 			vGapMm: parseFloat(root.getAttribute('data-vgap-mm')) || 0, // vertical seam (between columns)
 			hGapMm: parseFloat(root.getAttribute('data-hgap-mm')) || 0, // horizontal seam (between rows)
 			markColor: (function (mc) {
-				return mc === 'white' || mc === 'none' ? mc : 'black';
+				if (mc === 'white') {
+					return '#ffffff';
+				}
+				if (/^#[0-9a-fA-F]{6}$/.test(mc || '')) {
+					return mc;
+				}
+				return '#000000'; // black, none, or anything unrecognized
 			})(root.getAttribute('data-mark-color')),
+			showMarks: root.getAttribute('data-mark-color') !== 'none',
 			zoom: 1, // 1 = true size; only goes below 1 (never upscales)
 			rotation: 0, // image rotation in degrees: 0, 90, 180, 270
 			offsetX: 0, // image pan within the grid, in mm (art-area coords)
@@ -119,11 +126,17 @@
 	}
 
 	MichiApp.prototype.markColorHex = function () {
-		return this.state.markColor === 'white' ? '#ffffff' : '#000000';
+		return this.state.markColor;
+	};
+
+	MichiApp.prototype.syncCutLineControl = function () {
+		if (this.markColorInput) {
+			this.markColorInput.style.display = this.state.showMarks ? '' : 'none';
+		}
 	};
 
 	MichiApp.prototype.marksVisible = function () {
-		return this.state.markColor !== 'none';
+		return this.state.showMarks;
 	};
 
 	MichiApp.prototype.updateZoomLabel = function () {
@@ -422,17 +435,25 @@
 		spanField.classList.add('mm-field--wide');
 		controls.appendChild(spanField);
 
-		// Mark / cut-line color.
-		this.markColorSelect = el('select', { class: 'mm-select' }, [
-			el('option', { value: 'black', text: 'Black' }),
-			el('option', { value: 'white', text: 'White' }),
-			el('option', { value: 'none', text: 'None' })
-		]);
-		this.markColorSelect.addEventListener('change', function () {
-			self.state.markColor = self.markColorSelect.value;
+		// Cut lines: a single toggle reveals a native color picker. Toggling off
+		// is the "None" option (the native picker has no "none" of its own).
+		this.markShowToggle = el('input', { type: 'checkbox', class: 'mm-check' });
+		this.markColorInput = el('input', { type: 'color', class: 'mm-color' });
+		this.markShowToggle.addEventListener('change', function () {
+			self.state.showMarks = self.markShowToggle.checked;
+			self.syncCutLineControl();
 			self.renderPreview();
 		});
-		controls.appendChild(this.field('Cut line color', this.markColorSelect));
+		this.markColorInput.addEventListener('input', function () {
+			self.state.markColor = self.markColorInput.value;
+			self.renderPreview();
+		});
+		controls.appendChild(
+			this.field('', el('div', { class: 'mm-cutline-control' }, [
+				el('label', { class: 'mm-checkline' }, [this.markShowToggle, el('span', { text: 'Show cut lines' })]),
+				this.markColorInput
+			]))
+		);
 
 		return controls;
 	};
@@ -518,7 +539,9 @@
 		this.rowStepValue.textContent = this.state.rows;
 		this.zoomInput.value = Math.round(this.state.zoom * 100);
 		this.updateZoomLabel();
-		this.markColorSelect.value = this.state.markColor;
+		this.markShowToggle.checked = this.state.showMarks;
+		this.markColorInput.value = this.state.markColor;
+		this.syncCutLineControl();
 		this.cardPresetSelect.value = this.state.cardPreset;
 		this.customSizeField.style.display = this.state.cardPreset === 'custom' ? '' : 'none';
 		this.cardWInput.value = this.toDisplay(this.state.cardWidthMm);
@@ -1148,19 +1171,6 @@
 				ctx.strokeStyle = markColor;
 				ctx.strokeRect(cardX + 0.5, cardY + 0.5, cardWpx - 1, cardHpx - 1);
 			}
-
-			// Position label to help reassembly. Spans note their pocket extent.
-			var label = 'R' + (p.r0 + 1) + 'C' + (p.c0 + 1);
-			if (p.c1 > p.c0 || p.r1 > p.r0) {
-				label += ' span ' + (p.c1 - p.c0 + 1) + 'x' + (p.r1 - p.r0 + 1);
-			}
-			ctx.fillStyle = markColor;
-			ctx.globalAlpha = 0.65;
-			ctx.font = '10px sans-serif';
-			ctx.textBaseline = 'top';
-			ctx.textAlign = 'left';
-			ctx.fillText(label, tx + 1, ty + 1);
-			ctx.globalAlpha = 1;
 		}, this);
 	};
 

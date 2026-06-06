@@ -153,6 +153,22 @@
 	cursor: pointer;
 }
 
+.mm-cutline-control {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+}
+
+.mm-color {
+	width: 44px;
+	height: 32px;
+	padding: 2px;
+	border: 1px solid var(--mm-border);
+	border-radius: 8px;
+	background: #fff;
+	cursor: pointer;
+}
+
 /* ---- Spanning (merge pockets) controls ---- */
 .mm-span-controls {
 	display: flex;
