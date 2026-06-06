@@ -219,11 +219,34 @@
 
 		// Preview.
 		this.previewCanvas = el('canvas', { class: 'mm-preview-canvas' });
+
+		// Edge steppers: add/remove a column (right edge) or row (bottom edge),
+		// right next to the grid. They stay in sync with the top number inputs.
+		this.colStepValue = el('span', { class: 'mm-step-value' });
+		this.rowStepValue = el('span', { class: 'mm-step-value' });
+		this.colStepper = el('div', { class: 'mm-stepper mm-stepper--cols' }, [
+			el('span', { class: 'mm-step-label', text: 'Cols' }),
+			el('button', { type: 'button', class: 'mm-step-btn', text: '+', title: 'Add column', onClick: function () { self.nudgeGrid(1, 0); } }),
+			this.colStepValue,
+			el('button', { type: 'button', class: 'mm-step-btn', text: '\u2212', title: 'Remove column', onClick: function () { self.nudgeGrid(-1, 0); } })
+		]);
+		this.rowStepper = el('div', { class: 'mm-stepper mm-stepper--rows' }, [
+			el('span', { class: 'mm-step-label', text: 'Rows' }),
+			el('button', { type: 'button', class: 'mm-step-btn', text: '\u2212', title: 'Remove row', onClick: function () { self.nudgeGrid(0, -1); } }),
+			this.rowStepValue,
+			el('button', { type: 'button', class: 'mm-step-btn', text: '+', title: 'Add row', onClick: function () { self.nudgeGrid(0, 1); } })
+		]);
+		this.gridStage = el('div', { class: 'mm-grid-stage' }, [
+			this.previewCanvas,
+			this.colStepper,
+			this.rowStepper
+		]);
+
 		this.previewHint = el('div', { class: 'mm-preview-hint', text: 'Drag the image to reposition it within the grid.' });
 		this.previewWrap = el('div', { class: 'mm-preview' }, [
 			el('div', { class: 'mm-preview-empty', text: 'Upload an image to see a preview.' }),
 			zoomBar,
-			this.previewCanvas,
+			this.gridStage,
 			this.previewHint
 		]);
 		this.tool.appendChild(this.previewWrap);
@@ -277,29 +300,7 @@
 		var self = this;
 		var controls = el('div', { class: 'mm-controls' });
 
-		// Columns x rows.
-		this.colsInput = el('input', { type: 'number', min: '1', max: '20', class: 'mm-num' });
-		this.rowsInput = el('input', { type: 'number', min: '1', max: '20', class: 'mm-num' });
-		this.colsInput.addEventListener('input', function () {
-			self.state.cols = Math.max(1, parseInt(self.colsInput.value, 10) || 1);
-			self.clearSpans(); // pocket indices change with the grid
-			self.renderPreview();
-		});
-		this.rowsInput.addEventListener('input', function () {
-			self.state.rows = Math.max(1, parseInt(self.rowsInput.value, 10) || 1);
-			self.clearSpans();
-			self.renderPreview();
-		});
-		controls.appendChild(
-			this.field(
-				'Columns x rows',
-				el('div', { class: 'mm-inline' }, [
-					this.colsInput,
-					el('span', { class: 'mm-x', text: 'x' }),
-					this.rowsInput
-				])
-			)
-		);
+		// Grid columns/rows are set with the +/- steppers on the grid edges.
 
 		// Card type preset (sets the per-slot size).
 		this.cardPresetSelect = el(
@@ -459,9 +460,18 @@
 		return el('label', { class: 'mm-field' }, children);
 	};
 
+	/** Add or remove columns/rows from the grid (clamped to 1..20). */
+	MichiApp.prototype.nudgeGrid = function (dCols, dRows) {
+		this.state.cols = Math.max(1, Math.min(20, this.state.cols + dCols));
+		this.state.rows = Math.max(1, Math.min(20, this.state.rows + dRows));
+		this.clearSpans(); // pocket indices change with the grid
+		this.refreshControlValues();
+		this.renderPreview();
+	};
+
 	MichiApp.prototype.refreshControlValues = function () {
-		this.colsInput.value = this.state.cols;
-		this.rowsInput.value = this.state.rows;
+		this.colStepValue.textContent = this.state.cols;
+		this.rowStepValue.textContent = this.state.rows;
 		this.zoomInput.value = Math.round(this.state.zoom * 100);
 		this.updateZoomLabel();
 		this.cropToggle.checked = this.state.cropMarks;

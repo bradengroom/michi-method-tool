@@ -231,6 +231,17 @@
 	flex: 1;
 }
 
+.mm-grid-stage {
+	position: relative;
+	display: inline-block;
+	line-height: 0;
+}
+
+.michi-method.has-image .mm-grid-stage {
+	/* Reserve room for the edge steppers. */
+	margin: 0 52px 48px 0;
+}
+
 .mm-preview-canvas {
 	display: none;
 	max-width: 100%;
@@ -238,6 +249,73 @@
 	background: #fff;
 	cursor: grab;
 	touch-action: none;
+}
+
+/* ---- Grid edge steppers (+/- columns and rows) ---- */
+.mm-stepper {
+	display: none;
+	position: absolute;
+	align-items: center;
+	gap: 4px;
+	background: #fff;
+	border: 1px solid var(--mm-border);
+	border-radius: 999px;
+	padding: 4px;
+	box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+	line-height: 1;
+}
+
+.michi-method.has-image .mm-stepper {
+	display: flex;
+}
+
+.mm-stepper--cols {
+	flex-direction: column;
+	top: 50%;
+	left: 100%;
+	transform: translate(8px, -50%);
+}
+
+.mm-stepper--rows {
+	flex-direction: row;
+	left: 50%;
+	top: 100%;
+	transform: translate(-50%, 8px);
+}
+
+.mm-step-label {
+	font-size: 11px;
+	color: var(--mm-muted);
+	font-weight: 600;
+}
+
+.mm-step-btn {
+	width: 26px;
+	height: 26px;
+	border-radius: 50%;
+	border: 1px solid var(--mm-border);
+	background: #fff;
+	color: #374151;
+	cursor: pointer;
+	font-size: 16px;
+	line-height: 1;
+	padding: 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+
+.mm-step-btn:hover {
+	border-color: var(--mm-accent);
+	color: var(--mm-accent);
+}
+
+.mm-step-value {
+	min-width: 18px;
+	text-align: center;
+	font-variant-numeric: tabular-nums;
+	font-weight: 600;
+	color: #374151;
 }
 
 .mm-preview-canvas.is-dragging {
