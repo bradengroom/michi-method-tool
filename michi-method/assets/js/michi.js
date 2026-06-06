@@ -31,7 +31,6 @@
 		{ id: 'onepiece', label: 'One Piece (63 x 88 mm)', w: 63, h: 88 },
 		{ id: 'lorcana', label: 'Lorcana (63 x 88 mm)', w: 63, h: 88 },
 		{ id: 'yugioh', label: 'Yu-Gi-Oh! (59 x 86 mm)', w: 59, h: 86 },
-		{ id: 'mini', label: 'Mini (44 x 67 mm)', w: 44, h: 67 },
 		{ id: 'custom', label: 'Custom size', w: 0, h: 0 }
 	];
 
@@ -116,7 +115,7 @@
 			previewMode: 'assembled',
 			offsetX: 0, // image pan within the grid, in mm (art-area coords)
 			offsetY: 0,
-			units: root.getAttribute('data-default-units') === 'in' ? 'in' : 'mm'
+			units: 'mm'
 		};
 		this.state.cardPreset = detectCardPreset(this.state.cardWidthMm, this.state.cardHeightMm);
 		this.build();
@@ -301,18 +300,6 @@
 			)
 		);
 
-		// Units toggle.
-		this.unitsSelect = el('select', { class: 'mm-select' }, [
-			el('option', { value: 'mm', text: 'mm' }),
-			el('option', { value: 'in', text: 'inches' })
-		]);
-		this.unitsSelect.addEventListener('change', function () {
-			self.state.units = self.unitsSelect.value === 'in' ? 'in' : 'mm';
-			self.refreshControlValues();
-			self.renderPreview();
-		});
-		controls.appendChild(this.field('Units', this.unitsSelect));
-
 		// Card type preset (sets the per-slot size).
 		this.cardPresetSelect = el(
 			'select',
@@ -346,7 +333,7 @@
 			self.renderPreview();
 		});
 		this.customSizeField = this.field(
-			'Custom card size',
+			'Custom card size (mm)',
 			el('div', { class: 'mm-inline' }, [
 				this.cardWInput,
 				el('span', { class: 'mm-x', text: 'x' }),
@@ -385,7 +372,7 @@
 			self.state.bleedMm = Math.max(0, self.fromDisplay(self.bleedInput.value));
 			self.renderPreview();
 		});
-		controls.appendChild(this.field('Bleed (extra to trim)', this.bleedInput));
+		controls.appendChild(this.field('Bleed (mm, extra to trim)', this.bleedInput));
 
 		// Crop marks toggle.
 		this.cropToggle = el('input', { type: 'checkbox', class: 'mm-check' });
@@ -457,7 +444,6 @@
 	MichiApp.prototype.refreshControlValues = function () {
 		this.colsInput.value = this.state.cols;
 		this.rowsInput.value = this.state.rows;
-		this.unitsSelect.value = this.state.units;
 		this.zoomInput.value = Math.round(this.state.zoom * 100);
 		this.updateZoomLabel();
 		this.viewSelect.value = this.state.previewMode;
