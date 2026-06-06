@@ -463,6 +463,25 @@
 		return el('label', { class: 'mm-field' }, children);
 	};
 
+	/**
+	 * Pick a sensible default grid from the image's true (100%) print size:
+	 * how many cards it naturally covers at PRINT_DPI, capped at 3x3. The user
+	 * can expand beyond that with the steppers. Clears any spans.
+	 */
+	MichiApp.prototype.applyDefaultGrid = function () {
+		if (!this.image) {
+			return;
+		}
+		var s = this.state;
+		var physWmm = this.image.width / PX_PER_MM;
+		var physHmm = this.image.height / PX_PER_MM;
+		var cols = Math.round(physWmm / s.cardWidthMm);
+		var rows = Math.round(physHmm / s.cardHeightMm);
+		s.cols = Math.max(1, Math.min(3, cols || 1));
+		s.rows = Math.max(1, Math.min(3, rows || 1));
+		this.clearSpans();
+	};
+
 	/** Add or remove columns/rows from the grid (clamped to 1..20). */
 	MichiApp.prototype.nudgeGrid = function (dCols, dRows) {
 		this.state.cols = Math.max(1, Math.min(20, this.state.cols + dCols));
@@ -504,8 +523,10 @@
 				self.image = img;
 				self.state.offsetX = 0;
 				self.state.offsetY = 0;
+				self.applyDefaultGrid();
 				self.printButton.removeAttribute('disabled');
 				self.root.classList.add('has-image');
+				self.refreshControlValues();
 				self.renderPreview();
 			};
 			img.onerror = function () {
