@@ -30,8 +30,8 @@ Features:
   warns if you enlarge it far enough to look pixelated.
 * Drag-to-reposition: drag the image in the preview to choose exactly what
   shows in each slot.
-* Optional crop / cut marks, with black, white, or no cut lines.
-* Live per-card preview: see each print tile with its cut line and crop marks.
+* Cut lines, with black, white, or no lines.
+* Live per-card preview: see each print tile with its cut line.
 * Prints at exact physical size via your browser's print dialog.
 
 Privacy: all image processing happens in the visitor's browser. No image is
@@ -48,7 +48,7 @@ ever uploaded to your server.
 
 Optional shortcode attributes:
 
-`[michi_method cols="3" rows="3" card_width="63" card_height="88" crop_marks="true"]`
+`[michi_method cols="3" rows="3" card_width="63" card_height="88" mark_color="black"]`
 
 == Frequently Asked Questions ==
 

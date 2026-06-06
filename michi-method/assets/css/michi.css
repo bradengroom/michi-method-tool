@@ -567,13 +567,6 @@
 		overflow: visible;
 	}
 
-	.mm-crop-tick {
-		position: absolute;
-		background: #000;
-		-webkit-print-color-adjust: exact;
-		print-color-adjust: exact;
-	}
-
 	.mm-cut-line {
 		position: absolute;
 		box-sizing: border-box;

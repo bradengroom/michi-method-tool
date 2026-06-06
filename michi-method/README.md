@@ -66,11 +66,11 @@ Add to any page/post:
 - Or insert the **Michi Method Printer** block.
 
 Shortcode attributes (all optional): `cols`, `rows`, `card_width`,
-`card_height`, `vgap`, `hgap`, `crop_marks`, `mark_color`, `units`.
+`card_height`, `vgap`, `hgap`, `mark_color`, `units`.
 Example:
 
 ```
-[michi_method cols="3" rows="4" card_width="63" card_height="88" crop_marks="true"]
+[michi_method cols="3" rows="4" card_width="63" card_height="88" mark_color="black"]
 ```
 
 ### Spanning pockets (uncut pieces)

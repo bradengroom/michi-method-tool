@@ -12,8 +12,6 @@
 	var MM_PER_INCH = 25.4;
 	var PRINT_DPI = 300; // Target resolution for the sliced tile canvases.
 	var PX_PER_MM = PRINT_DPI / MM_PER_INCH;
-	var MARK_MARGIN_MM = 4; // Reserved gutter around a tile for crop marks.
-	var MARK_LEN_MM = 3; // Length of each crop-mark tick.
 
 	// Common trading-card sizes in millimeters. Several games share the 63x88mm
 	// "standard" size; they are listed separately so the common case is obvious.
@@ -102,7 +100,6 @@
 			cardHeightMm: parseFloat(root.getAttribute('data-card-height-mm')) || 88,
 			vGapMm: parseFloat(root.getAttribute('data-vgap-mm')) || 0, // vertical seam (between columns)
 			hGapMm: parseFloat(root.getAttribute('data-hgap-mm')) || 0, // horizontal seam (between rows)
-			cropMarks: root.getAttribute('data-crop-marks') === 'true',
 			markColor: (function (mc) {
 				return mc === 'white' || mc === 'none' ? mc : 'black';
 			})(root.getAttribute('data-mark-color')),
@@ -425,19 +422,6 @@
 		spanField.classList.add('mm-field--wide');
 		controls.appendChild(spanField);
 
-		// Crop marks toggle.
-		this.cropToggle = el('input', { type: 'checkbox', class: 'mm-check' });
-		this.cropToggle.addEventListener('change', function () {
-			self.state.cropMarks = self.cropToggle.checked;
-			self.renderPreview();
-		});
-		controls.appendChild(
-			this.field(
-				'',
-				el('label', { class: 'mm-checkline' }, [this.cropToggle, el('span', { text: 'Add corner crop marks' })])
-			)
-		);
-
 		// Mark / cut-line color.
 		this.markColorSelect = el('select', { class: 'mm-select' }, [
 			el('option', { value: 'black', text: 'Black' }),
@@ -534,7 +518,6 @@
 		this.rowStepValue.textContent = this.state.rows;
 		this.zoomInput.value = Math.round(this.state.zoom * 100);
 		this.updateZoomLabel();
-		this.cropToggle.checked = this.state.cropMarks;
 		this.markColorSelect.value = this.state.markColor;
 		this.cardPresetSelect.value = this.state.cardPreset;
 		this.customSizeField.style.display = this.state.cardPreset === 'custom' ? '' : 'none';
@@ -1067,18 +1050,16 @@
 	};
 
 	/**
-	 * Exploded preview: each card is drawn as its own print tile (with, if
-	 * enabled, crop marks) separated by gaps, mirroring what actually comes
-	 * out of the printer.
+	 * Exploded preview: each card is drawn as its own print tile, separated by
+	 * gaps, mirroring what actually comes out of the printer.
 	 */
 	MichiApp.prototype.renderExplodedPreview = function (canvas) {
 		var s = this.state;
-		var markMm = s.cropMarks ? MARK_MARGIN_MM : 0;
 
 		// Lay pieces out in a greedy wrapping flow, since spanning pieces have
 		// varying sizes and no longer fit a uniform grid.
-		var unitWmm = s.cardWidthMm + 2 * markMm;
-		var unitHmm = s.cardHeightMm + 2 * markMm;
+		var unitWmm = s.cardWidthMm;
+		var unitHmm = s.cardHeightMm;
 		var gapMm = Math.max(unitWmm, unitHmm) * 0.14;
 		var maxRowWmm = s.cols * unitWmm + Math.max(0, s.cols - 1) * gapMm;
 
@@ -1089,8 +1070,8 @@
 		var rowH = 0;
 		var totalWmm = 0;
 		list.forEach(function (p) {
-			var tw = p.wMm + 2 * markMm;
-			var th = p.hMm + 2 * markMm;
+			var tw = p.wMm;
+			var th = p.hMm;
 			if (cx > 0 && cx + tw > maxRowWmm + 0.01) {
 				cy += rowH + gapMm;
 				cx = 0;
@@ -1139,8 +1120,6 @@
 		// The exploded view is not interactive for selection.
 		this._previewLayout = null;
 		this._previewPxPerMm = scale;
-		var markPx = markMm * scale;
-		var markLenPx = MARK_LEN_MM * scale;
 		var markColor = this.markColorHex();
 		var showMarks = this.marksVisible();
 
@@ -1149,8 +1128,8 @@
 			var tx = item.x * scale;
 			var ty = item.y * scale;
 
-			var contentX = tx + markPx;
-			var contentY = ty + markPx;
+			var contentX = tx;
+			var contentY = ty;
 			var cardWpx = p.wMm * scale;
 			var cardHpx = p.hMm * scale;
 
@@ -1168,26 +1147,6 @@
 				ctx.lineWidth = 1;
 				ctx.strokeStyle = markColor;
 				ctx.strokeRect(cardX + 0.5, cardY + 0.5, cardWpx - 1, cardHpx - 1);
-			}
-
-			// Crop marks: corner ticks just outside each piece corner.
-			if (showMarks && s.cropMarks) {
-				ctx.strokeStyle = markColor;
-				ctx.lineWidth = 1;
-				ctx.beginPath();
-				var corners = [
-					[cardX, cardY, -1, -1],
-					[cardX + cardWpx, cardY, 1, -1],
-					[cardX, cardY + cardHpx, -1, 1],
-					[cardX + cardWpx, cardY + cardHpx, 1, 1]
-				];
-				corners.forEach(function (cnr) {
-					ctx.moveTo(cnr[0], cnr[1]);
-					ctx.lineTo(cnr[0] + cnr[2] * markLenPx, cnr[1]);
-					ctx.moveTo(cnr[0], cnr[1]);
-					ctx.lineTo(cnr[0], cnr[1] + cnr[3] * markLenPx);
-				});
-				ctx.stroke();
 			}
 
 			// Position label to help reassembly. Spans note their pocket extent.
@@ -1252,56 +1211,14 @@
 	};
 
 	/**
-	 * Build the 8 crop-mark tick elements for a tile, positioned at the trim
-	 * box corners (inset by the reserved mark margin).
-	 */
-	MichiApp.prototype.buildCropMarks = function (color, trimWmm, trimHmm) {
-		var inset = MARK_MARGIN_MM; // distance from tile edge to trim line
-		var len = MARK_LEN_MM;
-		var marks = [];
-
-		function tick(left, top, width, height) {
-			return el('div', {
-				class: 'mm-crop-tick',
-				style:
-					'left:' + left + 'mm;top:' + top + 'mm;width:' + width + 'mm;height:' + height + 'mm;' +
-					'background:' + color + ';'
-			});
-		}
-
-		var hair = 0.2; // mm line thickness
-		var x0 = inset;
-		var y0 = inset;
-		var x1 = inset + trimWmm;
-		var y1 = inset + trimHmm;
-
-		// Top-left
-		marks.push(tick(x0 - hair / 2, y0 - len, hair, len));
-		marks.push(tick(x0 - len, y0 - hair / 2, len, hair));
-		// Top-right
-		marks.push(tick(x1 - hair / 2, y0 - len, hair, len));
-		marks.push(tick(x1, y0 - hair / 2, len, hair));
-		// Bottom-left
-		marks.push(tick(x0 - hair / 2, y1, hair, len));
-		marks.push(tick(x0 - len, y1 - hair / 2, len, hair));
-		// Bottom-right
-		marks.push(tick(x1 - hair / 2, y1, hair, len));
-		marks.push(tick(x1, y1 - hair / 2, len, hair));
-
-		return marks;
-	};
-
-	/**
 	 * Build the cut-line rectangle drawn at the card (trim) boundary so the
 	 * print page clearly shows where to cut, matching the preview.
 	 */
 	MichiApp.prototype.buildCutLine = function (color, trimWmm, trimHmm) {
-		var s = this.state;
-		var inset = s.cropMarks ? MARK_MARGIN_MM : 0;
 		return el('div', {
 			class: 'mm-cut-line',
 			style:
-				'left:' + inset + 'mm;top:' + inset + 'mm;' +
+				'left:0mm;top:0mm;' +
 				'width:' + trimWmm + 'mm;height:' + trimHmm + 'mm;' +
 				'border-color:' + color + ';'
 		});
@@ -1311,10 +1228,8 @@
 		if (!this.image) {
 			return;
 		}
-		var s = this.state;
 		this.printRoot.innerHTML = '';
 
-		var pad = s.cropMarks ? MARK_MARGIN_MM : 0;
 		var markColor = this.markColorHex();
 
 		// One printed tile per piece. Spanning pieces print as a single uncut
@@ -1323,25 +1238,21 @@
 		var list = this.pieces();
 		for (var i = 0; i < list.length; i++) {
 			var piece = list[i];
-			var tileOuterW = piece.wMm + 2 * pad;
-			var tileOuterH = piece.hMm + 2 * pad;
+			var tileOuterW = piece.wMm;
+			var tileOuterH = piece.hMm;
 
 			var canvas = this.renderPieceCanvas(piece);
 			var img = canvas; // canvas prints fine directly
 			img.className = 'mm-tile-canvas';
 			img.style.width = piece.wMm + 'mm';
 			img.style.height = piece.hMm + 'mm';
-			img.style.left = pad + 'mm';
-			img.style.top = pad + 'mm';
+			img.style.left = '0mm';
+			img.style.top = '0mm';
 
-			// Cut line (outer boundary of the piece) unless marks are disabled;
-			// crop ticks are optional.
+			// Cut line (outer boundary of the piece) unless marks are disabled.
 			var children = [img];
 			if (this.marksVisible()) {
 				children.push(this.buildCutLine(markColor, piece.wMm, piece.hMm));
-				if (s.cropMarks) {
-					children = children.concat(this.buildCropMarks(markColor, piece.wMm, piece.hMm));
-				}
 			}
 
 			var tile = el('div', {
