@@ -75,6 +75,10 @@
 	gap: 6px;
 }
 
+.mm-field--wide {
+	grid-column: 1 / -1;
+}
+
 .mm-label {
 	font-weight: 600;
 	font-size: 13px;
@@ -149,6 +153,45 @@
 	cursor: pointer;
 }
 
+/* ---- Spanning (merge pockets) controls ---- */
+.mm-span-controls {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	align-items: center;
+}
+
+.mm-span-btn {
+	padding: 7px 12px;
+	border: 1px solid var(--mm-border);
+	border-radius: 8px;
+	background: #fff;
+	cursor: pointer;
+	font-size: 13px;
+	color: #374151;
+}
+
+.mm-span-btn:hover:not(:disabled) {
+	border-color: var(--mm-accent);
+}
+
+.mm-span-btn.is-active {
+	background: var(--mm-accent);
+	border-color: var(--mm-accent);
+	color: var(--mm-accent-contrast);
+}
+
+.mm-span-btn:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+}
+
+.mm-span-hint {
+	flex-basis: 100%;
+	color: var(--mm-muted);
+	font-size: 12px;
+}
+
 /* ---- Preview ---- */
 .mm-preview {
 	margin: 8px 0 18px;
@@ -168,6 +211,26 @@
 	color: var(--mm-muted);
 }
 
+.mm-zoom-bar {
+	display: none;
+	align-items: center;
+	gap: 12px;
+	width: 100%;
+	max-width: 420px;
+}
+
+.michi-method.has-image .mm-zoom-bar {
+	display: flex;
+}
+
+.mm-zoom-bar .mm-label {
+	white-space: nowrap;
+}
+
+.mm-zoom-bar .mm-inline {
+	flex: 1;
+}
+
 .mm-preview-canvas {
 	display: none;
 	max-width: 100%;
@@ -179,6 +242,10 @@
 
 .mm-preview-canvas.is-dragging {
 	cursor: grabbing;
+}
+
+.mm-preview-canvas.is-selecting {
+	cursor: crosshair;
 }
 
 .mm-preview-hint {

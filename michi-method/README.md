@@ -66,11 +66,22 @@ Add to any page/post:
 - Or insert the **Michi Method Printer** block.
 
 Shortcode attributes (all optional): `cols`, `rows`, `card_width`,
-`card_height`, `bleed`, `crop_marks`, `units`. Example:
+`card_height`, `bleed`, `vgap`, `hgap`, `crop_marks`, `mark_color`, `units`.
+Example:
 
 ```
 [michi_method cols="3" rows="4" card_width="63" card_height="88" crop_marks="true"]
 ```
+
+### Spanning pockets (uncut pieces)
+
+For art that crosses two or more pockets without cutting (fold the binder page
+and slide one longer piece across the pockets), set the **Pocket seam gap** to
+the width of the divider between your pocket windows, click **Select pockets**,
+drag across the pockets in the preview, then **Merge into one piece**. That
+block prints as a single uncut tile; the seam-gap strip is printed but hides
+behind the divider so the art stays continuous across the windows. Use
+**Split** or **Clear all spans** to undo.
 
 ## Printing tip
 

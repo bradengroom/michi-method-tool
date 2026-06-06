@@ -109,6 +109,8 @@
 			cardWidthMm: parseFloat(root.getAttribute('data-card-width-mm')) || 63,
 			cardHeightMm: parseFloat(root.getAttribute('data-card-height-mm')) || 88,
 			bleedMm: parseFloat(root.getAttribute('data-default-bleed-mm')) || 0,
+			vGapMm: parseFloat(root.getAttribute('data-vgap-mm')) || 0, // vertical seam (between columns)
+			hGapMm: parseFloat(root.getAttribute('data-hgap-mm')) || 0, // horizontal seam (between rows)
 			cropMarks: root.getAttribute('data-crop-marks') === 'true',
 			markColor: (function (mc) {
 				return mc === 'white' || mc === 'none' ? mc : 'black';
@@ -117,7 +119,10 @@
 			previewMode: 'assembled',
 			offsetX: 0, // image pan within the grid, in mm (art-area coords)
 			offsetY: 0,
-			units: 'mm'
+			units: 'mm',
+			spans: [], // merged pockets: array of {c0,r0,c1,r1} inclusive rectangles
+			selectMode: false, // when true, dragging selects pockets instead of panning
+			selection: null // committed selection rect {c0,r0,c1,r1} or null
 		};
 		this.state.cardPreset = detectCardPreset(this.state.cardWidthMm, this.state.cardHeightMm);
 		this.build();
@@ -207,11 +212,26 @@
 		// Controls.
 		this.tool.appendChild(this.buildControls());
 
+		// Zoom control, kept next to the preview so it sits right by the image.
+		this.zoomInput = el('input', { type: 'range', min: '10', max: '400', step: '1', class: 'mm-range' });
+		this.zoomValue = el('span', { class: 'mm-range-value' });
+		this.zoomInput.addEventListener('input', function () {
+			var pct = parseInt(self.zoomInput.value, 10) || 100;
+			self.state.zoom = Math.max(0.1, Math.min(4, pct / 100));
+			self.updateZoomLabel();
+			self.renderPreview();
+		});
+		var zoomBar = el('div', { class: 'mm-zoom-bar' }, [
+			el('span', { class: 'mm-label', text: 'Zoom (100% = true size)' }),
+			el('div', { class: 'mm-inline' }, [this.zoomInput, this.zoomValue])
+		]);
+
 		// Preview.
 		this.previewCanvas = el('canvas', { class: 'mm-preview-canvas' });
 		this.previewHint = el('div', { class: 'mm-preview-hint', text: 'Drag the image to reposition it within the grid.' });
 		this.previewWrap = el('div', { class: 'mm-preview' }, [
 			el('div', { class: 'mm-preview-empty', text: 'Upload an image to see a preview.' }),
+			zoomBar,
 			this.previewCanvas,
 			this.previewHint
 		]);
@@ -287,11 +307,13 @@
 		this.rowsInput = el('input', { type: 'number', min: '1', max: '20', class: 'mm-num' });
 		this.colsInput.addEventListener('input', function () {
 			self.state.cols = Math.max(1, parseInt(self.colsInput.value, 10) || 1);
+			self.clearSpans(); // pocket indices change with the grid
 			self.syncPresetSelection();
 			self.renderPreview();
 		});
 		this.rowsInput.addEventListener('input', function () {
 			self.state.rows = Math.max(1, parseInt(self.rowsInput.value, 10) || 1);
+			self.clearSpans();
 			self.syncPresetSelection();
 			self.renderPreview();
 		});
@@ -348,19 +370,6 @@
 		);
 		controls.appendChild(this.customSizeField);
 
-		// Fit mode.
-		this.zoomInput = el('input', { type: 'range', min: '10', max: '400', step: '1', class: 'mm-range' });
-		this.zoomValue = el('span', { class: 'mm-range-value' });
-		this.zoomInput.addEventListener('input', function () {
-			var pct = parseInt(self.zoomInput.value, 10) || 100;
-			self.state.zoom = Math.max(0.1, Math.min(4, pct / 100));
-			self.updateZoomLabel();
-			self.renderPreview();
-		});
-		controls.appendChild(
-			this.field('Zoom (100% = true size)', el('div', { class: 'mm-inline' }, [this.zoomInput, this.zoomValue]))
-		);
-
 		// Preview mode.
 		this.viewSelect = el('select', { class: 'mm-select' }, [
 			el('option', { value: 'assembled', text: 'Assembled (reassembled image)' }),
@@ -379,6 +388,77 @@
 			self.renderPreview();
 		});
 		controls.appendChild(this.field('Bleed (mm, extra to trim)', this.bleedInput));
+
+		// Seam gaps: the dead strip between pocket windows. Used so a piece that
+		// spans multiple pockets stays visually continuous across the divider.
+		this.vGapInput = el('input', { type: 'number', step: 'any', min: '0', class: 'mm-num' });
+		this.hGapInput = el('input', { type: 'number', step: 'any', min: '0', class: 'mm-num' });
+		this.vGapInput.addEventListener('input', function () {
+			self.state.vGapMm = Math.max(0, self.fromDisplay(self.vGapInput.value));
+			self.renderPreview();
+		});
+		this.hGapInput.addEventListener('input', function () {
+			self.state.hGapMm = Math.max(0, self.fromDisplay(self.hGapInput.value));
+			self.renderPreview();
+		});
+		controls.appendChild(
+			this.field(
+				'Pocket seam gap (mm): vertical x horizontal',
+				el('div', { class: 'mm-inline' }, [
+					this.vGapInput,
+					el('span', { class: 'mm-x', text: 'x' }),
+					this.hGapInput
+				])
+			)
+		);
+
+		// Spanning: merge adjacent pockets into one uncut piece.
+		this.selectToggle = el('button', {
+			type: 'button',
+			class: 'mm-span-btn',
+			text: 'Select pockets',
+			onClick: function () {
+				self.setSelectMode(!self.state.selectMode);
+			}
+		});
+		this.mergeButton = el('button', {
+			type: 'button',
+			class: 'mm-span-btn',
+			text: 'Merge into one piece',
+			onClick: function () {
+				self.mergeSelection();
+			}
+		});
+		this.splitButton = el('button', {
+			type: 'button',
+			class: 'mm-span-btn',
+			text: 'Split',
+			onClick: function () {
+				self.splitSelection();
+			}
+		});
+		this.clearSpansButton = el('button', {
+			type: 'button',
+			class: 'mm-span-btn',
+			text: 'Clear all spans',
+			onClick: function () {
+				self.clearSpans();
+				self.renderPreview();
+			}
+		});
+		this.spanHint = el('div', { class: 'mm-span-hint' });
+		var spanField = this.field(
+			'Span pockets (uncut)',
+			el('div', { class: 'mm-span-controls' }, [
+				this.selectToggle,
+				this.mergeButton,
+				this.splitButton,
+				this.clearSpansButton,
+				this.spanHint
+			])
+		);
+		spanField.classList.add('mm-field--wide');
+		controls.appendChild(spanField);
 
 		// Crop marks toggle.
 		this.cropToggle = el('input', { type: 'checkbox', class: 'mm-check' });
@@ -419,6 +499,9 @@
 
 	MichiApp.prototype.applyPreset = function (preset) {
 		if (preset.cols > 0) {
+			if (preset.cols !== this.state.cols || preset.rows !== this.state.rows) {
+				this.clearSpans();
+			}
 			this.state.cols = preset.cols;
 			this.state.rows = preset.rows;
 		}
@@ -461,6 +544,8 @@
 		this.cardWInput.value = this.toDisplay(this.state.cardWidthMm);
 		this.cardHInput.value = this.toDisplay(this.state.cardHeightMm);
 		this.bleedInput.value = this.toDisplay(this.state.bleedMm);
+		this.vGapInput.value = this.toDisplay(this.state.vGapMm);
+		this.hGapInput.value = this.toDisplay(this.state.hGapMm);
 		var unitLabel = this.state.units;
 		this.cardWInput.setAttribute('aria-label', 'Card width in ' + unitLabel);
 		this.cardHInput.setAttribute('aria-label', 'Card height in ' + unitLabel);
@@ -493,13 +578,165 @@
 	};
 
 	/**
-	 * The art area in millimeters (the full reassembled print region).
+	 * The art area in millimeters (the full reassembled print region). This
+	 * includes the inter-pocket seam gaps, so the image is mapped continuously
+	 * across the whole physical board and pieces stay aligned with each other.
 	 */
 	MichiApp.prototype.artSizeMm = function () {
+		var s = this.state;
 		return {
-			w: this.state.cols * this.state.cardWidthMm,
-			h: this.state.rows * this.state.cardHeightMm
+			w: s.cols * s.cardWidthMm + Math.max(0, s.cols - 1) * s.vGapMm,
+			h: s.rows * s.cardHeightMm + Math.max(0, s.rows - 1) * s.hGapMm
 		};
+	};
+
+	/** Left/top of a pocket window, in mm (within the trim area). */
+	MichiApp.prototype.pocketX = function (col) {
+		return col * (this.state.cardWidthMm + this.state.vGapMm);
+	};
+	MichiApp.prototype.pocketY = function (row) {
+		return row * (this.state.cardHeightMm + this.state.hGapMm);
+	};
+
+	/** The mm rectangle of a span/cell {c0,r0,c1,r1}, including internal seam gaps. */
+	MichiApp.prototype.pieceRectMm = function (span) {
+		var s = this.state;
+		return {
+			c0: span.c0,
+			r0: span.r0,
+			c1: span.c1,
+			r1: span.r1,
+			xMm: this.pocketX(span.c0),
+			yMm: this.pocketY(span.r0),
+			wMm: (span.c1 - span.c0 + 1) * s.cardWidthMm + (span.c1 - span.c0) * s.vGapMm,
+			hMm: (span.r1 - span.r0 + 1) * s.cardHeightMm + (span.r1 - span.r0) * s.hGapMm
+		};
+	};
+
+	/** Index into state.spans for the span covering (col,row), or -1 if uncovered. */
+	MichiApp.prototype.spanIndexForCell = function (col, row) {
+		var spans = this.state.spans || [];
+		for (var i = 0; i < spans.length; i++) {
+			var sp = spans[i];
+			if (col >= sp.c0 && col <= sp.c1 && row >= sp.r0 && row <= sp.r1) {
+				return i;
+			}
+		}
+		return -1;
+	};
+
+	/**
+	 * The full list of printable pieces: one rect per valid span, plus a 1x1
+	 * piece for every pocket not covered by a span. Out-of-bounds spans are
+	 * skipped defensively.
+	 */
+	MichiApp.prototype.pieces = function () {
+		var s = this.state;
+		var self = this;
+		var list = [];
+		var covered = {};
+		(s.spans || []).forEach(function (sp) {
+			if (sp.c0 < 0 || sp.r0 < 0 || sp.c1 >= s.cols || sp.r1 >= s.rows || sp.c1 < sp.c0 || sp.r1 < sp.r0) {
+				return;
+			}
+			for (var r = sp.r0; r <= sp.r1; r++) {
+				for (var c = sp.c0; c <= sp.c1; c++) {
+					covered[c + ',' + r] = true;
+				}
+			}
+			list.push(self.pieceRectMm(sp));
+		});
+		for (var row = 0; row < s.rows; row++) {
+			for (var col = 0; col < s.cols; col++) {
+				if (!covered[col + ',' + row]) {
+					list.push(self.pieceRectMm({ c0: col, r0: row, c1: col, r1: row }));
+				}
+			}
+		}
+		return list;
+	};
+
+	/** Remove any spans, clamp/normalize, used after grid or card changes. */
+	MichiApp.prototype.clearSpans = function () {
+		this.state.spans = [];
+		this.state.selection = null;
+	};
+
+	function rectsIntersect(a, b) {
+		return !(a.c1 < b.c0 || a.c0 > b.c1 || a.r1 < b.r0 || a.r0 > b.r1);
+	}
+
+	/** Toggle the pocket-selection mode (vs image panning). */
+	MichiApp.prototype.setSelectMode = function (on) {
+		this.state.selectMode = !!on;
+		if (this.state.selectMode) {
+			// Selection only works against the assembled layout.
+			this.state.previewMode = 'assembled';
+			this.viewSelect.value = 'assembled';
+		} else {
+			this.state.selection = null;
+		}
+		this.renderPreview();
+	};
+
+	/** Merge the current selection into one uncut spanning piece. */
+	MichiApp.prototype.mergeSelection = function () {
+		var sel = this.state.selection;
+		if (!sel) {
+			return;
+		}
+		var single = sel.c0 === sel.c1 && sel.r0 === sel.r1;
+		// Drop any existing spans overlapping the selection, then add the new one
+		// (unless it is a single pocket, which is just an un-merge).
+		this.state.spans = this.state.spans.filter(function (sp) {
+			return !rectsIntersect(sp, sel);
+		});
+		if (!single) {
+			this.state.spans.push({ c0: sel.c0, r0: sel.r0, c1: sel.c1, r1: sel.r1 });
+		}
+		this.state.selection = null;
+		this.renderPreview();
+	};
+
+	/** Split (un-merge) any spans intersecting the current selection. */
+	MichiApp.prototype.splitSelection = function () {
+		var sel = this.state.selection;
+		if (!sel) {
+			return;
+		}
+		this.state.spans = this.state.spans.filter(function (sp) {
+			return !rectsIntersect(sp, sel);
+		});
+		this.state.selection = null;
+		this.renderPreview();
+	};
+
+	/** Reflect selection state in the spanning control buttons. */
+	MichiApp.prototype.updateSpanControls = function () {
+		if (!this.selectToggle) {
+			return;
+		}
+		var on = this.state.selectMode;
+		this.selectToggle.classList.toggle('is-active', on);
+		this.selectToggle.textContent = on ? 'Done selecting' : 'Select pockets';
+		var hasSel = !!this.state.selection;
+		this.mergeButton.disabled = !on || !hasSel;
+		this.splitButton.disabled = !on || !hasSel;
+		var hint;
+		if (!on) {
+			hint = 'Click "Select pockets", then drag across pockets to merge them into one uncut piece.';
+		} else if (!hasSel) {
+			hint = 'Drag across two or more pockets in the preview to select them.';
+		} else {
+			var sel = this.state.selection;
+			hint =
+				'Selected ' +
+				(sel.c1 - sel.c0 + 1) +
+				' x ' +
+				(sel.r1 - sel.r0 + 1) +
+				' pockets. Choose Merge (one piece) or Split (separate again).';
+		}
+		this.spanHint.textContent = hint;
 	};
 
 	/**
@@ -521,43 +758,87 @@
 	/**
 	 * Make the preview canvas draggable to pan the image within the grid.
 	 */
+	/** Map a pointer event to a pocket {col,row} using the assembled layout. */
+	MichiApp.prototype.cellFromEvent = function (e) {
+		var L = this._previewLayout;
+		if (!L || !L.canvas) {
+			return null;
+		}
+		var rect = L.canvas.getBoundingClientRect();
+		var pitchX = L.cellW + L.vGapPx;
+		var pitchY = L.cellH + L.hGapPx;
+		var col = Math.floor((e.clientX - rect.left - L.ox) / pitchX);
+		var row = Math.floor((e.clientY - rect.top - L.oy) / pitchY);
+		col = Math.max(0, Math.min(L.cols - 1, col));
+		row = Math.max(0, Math.min(L.rows - 1, row));
+		return { col: col, row: row };
+	};
+
 	MichiApp.prototype.attachDrag = function () {
 		var self = this;
-		var dragging = false;
+		var mode = null; // 'pan' or 'select'
 		var lastX = 0;
 		var lastY = 0;
+		var startCell = null;
 		var canvas = this.previewCanvas;
 
 		canvas.addEventListener('pointerdown', function (e) {
 			if (!self.image) {
 				return;
 			}
-			dragging = true;
-			lastX = e.clientX;
-			lastY = e.clientY;
+			if (self.state.selectMode) {
+				var cell = self.cellFromEvent(e);
+				if (!cell) {
+					return;
+				}
+				mode = 'select';
+				startCell = cell;
+				self.state.selection = { c0: cell.col, r0: cell.row, c1: cell.col, r1: cell.row };
+				self.renderPreview();
+			} else {
+				mode = 'pan';
+				lastX = e.clientX;
+				lastY = e.clientY;
+				canvas.classList.add('is-dragging');
+			}
 			if (canvas.setPointerCapture) {
 				canvas.setPointerCapture(e.pointerId);
 			}
-			canvas.classList.add('is-dragging');
 			e.preventDefault();
 		});
 
 		canvas.addEventListener('pointermove', function (e) {
-			if (!dragging || !self.image) {
+			if (!mode || !self.image) {
 				return;
 			}
-			var ppm = self._previewPxPerMm || 1;
-			self.state.offsetX += (e.clientX - lastX) / ppm;
-			self.state.offsetY += (e.clientY - lastY) / ppm;
-			lastX = e.clientX;
-			lastY = e.clientY;
-			self.renderPreview();
+			if (mode === 'select') {
+				var cell = self.cellFromEvent(e);
+				if (!cell || !startCell) {
+					return;
+				}
+				self.state.selection = {
+					c0: Math.min(startCell.col, cell.col),
+					r0: Math.min(startCell.row, cell.row),
+					c1: Math.max(startCell.col, cell.col),
+					r1: Math.max(startCell.row, cell.row)
+				};
+				self.renderPreview();
+			} else {
+				var ppm = self._previewPxPerMm || 1;
+				self.state.offsetX += (e.clientX - lastX) / ppm;
+				self.state.offsetY += (e.clientY - lastY) / ppm;
+				lastX = e.clientX;
+				lastY = e.clientY;
+				self.renderPreview();
+			}
 		});
 
 		function endDrag() {
-			if (dragging) {
-				dragging = false;
+			if (mode) {
+				mode = null;
+				startCell = null;
 				canvas.classList.remove('is-dragging');
+				self.renderPreview();
 			}
 		}
 		canvas.addEventListener('pointerup', endDrag);
@@ -635,6 +916,13 @@
 			this.renderAssembledPreview(canvas);
 		}
 
+		canvas.classList.toggle('is-selecting', !!this.state.selectMode);
+		if (this.previewHint) {
+			this.previewHint.textContent = this.state.selectMode
+				? 'Drag across pockets to select them, then Merge or Split.'
+				: 'Drag the image to reposition it within the grid.';
+		}
+		this.updateSpanControls();
 		this.updateQuality();
 	};
 
@@ -676,10 +964,40 @@
 		var bleedPx = bleed * scale;
 		var cellW = s.cardWidthMm * scale;
 		var cellH = s.cardHeightMm * scale;
+		var vGapPx = s.vGapMm * scale;
+		var hGapPx = s.hGapMm * scale;
 		var ox = bleedPx; // trim-area origin within the canvas
 		var oy = bleedPx;
-		var artWpx = art.w * scale;
-		var artHpx = art.h * scale;
+
+		// Remember the layout so pointer events can map to pocket indices.
+		this._previewLayout = {
+			canvas: canvas,
+			ox: ox,
+			oy: oy,
+			cellW: cellW,
+			cellH: cellH,
+			vGapPx: vGapPx,
+			hGapPx: hGapPx,
+			cols: s.cols,
+			rows: s.rows
+		};
+
+		var self = this;
+		function pocketLeft(col) {
+			return ox + col * (cellW + vGapPx);
+		}
+		function pocketTop(row) {
+			return oy + row * (cellH + hGapPx);
+		}
+		// Pixel rect of a piece/cell rectangle within the preview.
+		function pieceRectPx(p) {
+			return {
+				x: pocketLeft(p.c0),
+				y: pocketTop(p.r0),
+				w: (p.c1 - p.c0 + 1) * cellW + (p.c1 - p.c0) * vGapPx,
+				h: (p.r1 - p.r0 + 1) * cellH + (p.r1 - p.r0) * hGapPx
+			};
+		}
 
 		// Background + image, placed at its true size scaled by zoom and panned.
 		ctx.fillStyle = '#ffffff';
@@ -687,43 +1005,92 @@
 		var pm = placementMm(art.w, art.h, this.image.width, this.image.height, s.zoom, s.offsetX, s.offsetY);
 		ctx.drawImage(this.image, ox + pm.dx * scale, oy + pm.dy * scale, pm.dW * scale, pm.dH * scale);
 
-		var col, row, x, y;
+		var col, row;
 
-		// Shade each card's bleed ring (the part trimmed off) in translucent red.
-		if (bleedPx > 0.5) {
+		// Shade seam gaps that fall BETWEEN separate pieces (these are trimmed
+		// off / discarded). Gaps interior to a spanning piece are left showing
+		// the image, since that art prints continuously behind the pocket seam.
+		if ((vGapPx > 0.5 || hGapPx > 0.5)) {
 			ctx.save();
-			ctx.fillStyle = 'rgba(220,38,38,0.16)';
+			ctx.fillStyle = 'rgba(120,120,120,0.30)';
+			// Vertical seam segments (between columns), per row.
 			for (row = 0; row < s.rows; row++) {
+				for (col = 0; col < s.cols - 1; col++) {
+					var interiorV =
+						self.spanIndexForCell(col, row) === self.spanIndexForCell(col + 1, row) &&
+						self.spanIndexForCell(col, row) >= 0;
+					if (!interiorV && vGapPx > 0.5) {
+						ctx.fillRect(pocketLeft(col) + cellW, pocketTop(row), vGapPx, cellH);
+					}
+				}
+			}
+			// Horizontal seam segments (between rows), per column.
+			for (row = 0; row < s.rows - 1; row++) {
 				for (col = 0; col < s.cols; col++) {
-					x = ox + col * cellW;
-					y = oy + row * cellH;
-					ctx.beginPath();
-					ctx.rect(x - bleedPx, y - bleedPx, cellW + 2 * bleedPx, cellH + 2 * bleedPx);
-					ctx.rect(x, y, cellW, cellH);
-					ctx.fill('evenodd');
+					var interiorH =
+						self.spanIndexForCell(col, row) === self.spanIndexForCell(col, row + 1) &&
+						self.spanIndexForCell(col, row) >= 0;
+					if (!interiorH && hGapPx > 0.5) {
+						ctx.fillRect(pocketLeft(col), pocketTop(row) + cellH, cellW, hGapPx);
+					}
+				}
+			}
+			// Corner seam squares (between four pockets).
+			for (row = 0; row < s.rows - 1; row++) {
+				for (col = 0; col < s.cols - 1; col++) {
+					var a = self.spanIndexForCell(col, row);
+					var interiorC =
+						a >= 0 &&
+						a === self.spanIndexForCell(col + 1, row) &&
+						a === self.spanIndexForCell(col, row + 1) &&
+						a === self.spanIndexForCell(col + 1, row + 1);
+					if (!interiorC && vGapPx > 0.5 && hGapPx > 0.5) {
+						ctx.fillRect(pocketLeft(col) + cellW, pocketTop(row) + cellH, vGapPx, hGapPx);
+					}
 				}
 			}
 			ctx.restore();
 		}
 
-		// Solid cut / trim lines (the actual card boundaries = where you cut).
+		var list = this.pieces();
+
+		// Shade the bleed ring (trimmed off) around each piece in translucent red.
+		if (bleedPx > 0.5) {
+			ctx.save();
+			ctx.fillStyle = 'rgba(220,38,38,0.16)';
+			list.forEach(function (p) {
+				var r = pieceRectPx(p);
+				ctx.beginPath();
+				ctx.rect(r.x - bleedPx, r.y - bleedPx, r.w + 2 * bleedPx, r.h + 2 * bleedPx);
+				ctx.rect(r.x, r.y, r.w, r.h);
+				ctx.fill('evenodd');
+			});
+			ctx.restore();
+		}
+
+		// Solid cut / trim lines: the outer boundary of each piece (no internal
+		// lines inside a spanning piece, since you do not cut there).
 		if (this.marksVisible()) {
 			ctx.setLineDash([]);
 			ctx.lineWidth = 1;
 			ctx.strokeStyle = this.markColorHex();
-			ctx.strokeRect(ox + 0.5, oy + 0.5, artWpx - 1, artHpx - 1);
-			ctx.beginPath();
-			for (col = 1; col < s.cols; col++) {
-				x = Math.round(ox + col * cellW) + 0.5;
-				ctx.moveTo(x, oy);
-				ctx.lineTo(x, oy + artHpx);
-			}
-			for (row = 1; row < s.rows; row++) {
-				y = Math.round(oy + row * cellH) + 0.5;
-				ctx.moveTo(ox, y);
-				ctx.lineTo(ox + artWpx, y);
-			}
-			ctx.stroke();
+			list.forEach(function (p) {
+				var r = pieceRectPx(p);
+				ctx.strokeRect(Math.round(r.x) + 0.5, Math.round(r.y) + 0.5, Math.round(r.w) - 1, Math.round(r.h) - 1);
+			});
+		}
+
+		// Selection highlight while choosing pockets to merge.
+		if (s.selectMode && s.selection) {
+			var sr = pieceRectPx(s.selection);
+			ctx.save();
+			ctx.fillStyle = 'rgba(37,99,235,0.22)';
+			ctx.fillRect(sr.x, sr.y, sr.w, sr.h);
+			ctx.setLineDash([5, 3]);
+			ctx.strokeStyle = 'rgba(37,99,235,0.95)';
+			ctx.lineWidth = 2;
+			ctx.strokeRect(sr.x + 1, sr.y + 1, sr.w - 2, sr.h - 2);
+			ctx.restore();
 		}
 
 		// Dashed outline of the full printed extent (trim + bleed).
@@ -745,12 +1112,44 @@
 	MichiApp.prototype.renderExplodedPreview = function (canvas) {
 		var s = this.state;
 		var markMm = s.cropMarks ? MARK_MARGIN_MM : 0;
-		var tileWmm = s.cardWidthMm + 2 * s.bleedMm + 2 * markMm;
-		var tileHmm = s.cardHeightMm + 2 * s.bleedMm + 2 * markMm;
-		var gapMm = Math.max(tileWmm, tileHmm) * 0.14;
 
-		var totalWmm = s.cols * tileWmm + (s.cols - 1) * gapMm;
-		var totalHmm = s.rows * tileHmm + (s.rows - 1) * gapMm;
+		// Lay pieces out in a greedy wrapping flow, since spanning pieces have
+		// varying sizes and no longer fit a uniform grid.
+		var unitWmm = s.cardWidthMm + 2 * s.bleedMm + 2 * markMm;
+		var unitHmm = s.cardHeightMm + 2 * s.bleedMm + 2 * markMm;
+		var gapMm = Math.max(unitWmm, unitHmm) * 0.14;
+		var maxRowWmm = s.cols * unitWmm + Math.max(0, s.cols - 1) * gapMm;
+
+		var list = this.pieces();
+		var layout = [];
+		var cx = 0;
+		var cy = 0;
+		var rowH = 0;
+		var totalWmm = 0;
+		list.forEach(function (p) {
+			var tw = p.wMm + 2 * s.bleedMm + 2 * markMm;
+			var th = p.hMm + 2 * s.bleedMm + 2 * markMm;
+			if (cx > 0 && cx + tw > maxRowWmm + 0.01) {
+				cy += rowH + gapMm;
+				cx = 0;
+				rowH = 0;
+			}
+			layout.push({ p: p, x: cx, y: cy, tw: tw, th: th });
+			cx += tw + gapMm;
+			if (th > rowH) {
+				rowH = th;
+			}
+			if (cx - gapMm > totalWmm) {
+				totalWmm = cx - gapMm;
+			}
+		});
+		var totalHmm = cy + rowH;
+		if (totalWmm <= 0) {
+			totalWmm = maxRowWmm;
+		}
+		if (totalHmm <= 0) {
+			totalHmm = unitHmm;
+		}
 
 		var maxW = Math.min(this.previewWrap.clientWidth || 480, 560);
 		if (maxW < 200) {
@@ -775,96 +1174,94 @@
 		ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 		ctx.clearRect(0, 0, viewW, viewH);
 
+		// The exploded view is not interactive for selection.
+		this._previewLayout = null;
 		this._previewPxPerMm = scale;
-		var tileWpx = tileWmm * scale;
-		var tileHpx = tileHmm * scale;
-		var gapPx = gapMm * scale;
 		var bleedPx = s.bleedMm * scale;
 		var markPx = markMm * scale;
-		var cardWpx = s.cardWidthMm * scale;
-		var cardHpx = s.cardHeightMm * scale;
 		var markLenPx = MARK_LEN_MM * scale;
+		var markColor = this.markColorHex();
+		var showMarks = this.marksVisible();
 
-		for (var row = 0; row < s.rows; row++) {
-			for (var col = 0; col < s.cols; col++) {
-				var tx = col * (tileWpx + gapPx);
-				var ty = row * (tileHpx + gapPx);
+		layout.forEach(function (item) {
+			var p = item.p;
+			var tx = item.x * scale;
+			var ty = item.y * scale;
 
-				// Card + bleed content area within the tile (inset by mark margin).
-				var contentX = tx + markPx;
-				var contentY = ty + markPx;
-				var contentW = cardWpx + 2 * bleedPx;
-				var contentH = cardHpx + 2 * bleedPx;
+			var contentX = tx + markPx;
+			var contentY = ty + markPx;
+			var cardWpx = p.wMm * scale;
+			var cardHpx = p.hMm * scale;
+			var contentW = cardWpx + 2 * bleedPx;
+			var contentH = cardHpx + 2 * bleedPx;
 
-				var tileCanvas = this.renderTileCanvas(col, row);
-				ctx.fillStyle = '#ffffff';
-				ctx.fillRect(contentX, contentY, contentW, contentH);
-				ctx.drawImage(tileCanvas, contentX, contentY, contentW, contentH);
+			var pieceCanvas = this.renderPieceCanvas(p);
+			ctx.fillStyle = '#ffffff';
+			ctx.fillRect(contentX, contentY, contentW, contentH);
+			ctx.drawImage(pieceCanvas, contentX, contentY, contentW, contentH);
 
-				var cardX = contentX + bleedPx;
-				var cardY = contentY + bleedPx;
+			var cardX = contentX + bleedPx;
+			var cardY = contentY + bleedPx;
 
-				// Shade the bleed ring (trimmed off) in translucent red.
-				if (bleedPx > 0.5) {
-					ctx.save();
-					ctx.fillStyle = 'rgba(220,38,38,0.18)';
-					ctx.beginPath();
-					ctx.rect(contentX, contentY, contentW, contentH);
-					ctx.rect(cardX, cardY, cardWpx, cardHpx);
-					ctx.fill('evenodd');
-					ctx.restore();
-				}
-
-				// Card boundary = the cut line.
-				var markColor = this.markColorHex();
-				var showMarks = this.marksVisible();
-				if (showMarks) {
-					ctx.setLineDash([]);
-					ctx.lineWidth = 1;
-					ctx.strokeStyle = markColor;
-					ctx.strokeRect(cardX + 0.5, cardY + 0.5, cardWpx - 1, cardHpx - 1);
-				}
-
-				// Crop marks: corner ticks just outside each card corner.
-				if (showMarks && s.cropMarks) {
-					ctx.strokeStyle = markColor;
-					ctx.lineWidth = 1;
-					ctx.beginPath();
-					var corners = [
-						[cardX, cardY, -1, -1],
-						[cardX + cardWpx, cardY, 1, -1],
-						[cardX, cardY + cardHpx, -1, 1],
-						[cardX + cardWpx, cardY + cardHpx, 1, 1]
-					];
-					corners.forEach(function (cnr) {
-						var px = cnr[0];
-						var py = cnr[1];
-						var sx = cnr[2];
-						var sy = cnr[3];
-						ctx.moveTo(px, py);
-						ctx.lineTo(px + sx * markLenPx, py);
-						ctx.moveTo(px, py);
-						ctx.lineTo(px, py + sy * markLenPx);
-					});
-					ctx.stroke();
-				}
-
-				// Small position label to help reassembly (row, col, 1-based).
-				ctx.fillStyle = markColor;
-				ctx.globalAlpha = 0.65;
-				ctx.font = '10px sans-serif';
-				ctx.textBaseline = 'top';
-				ctx.textAlign = 'left';
-				ctx.fillText('R' + (row + 1) + 'C' + (col + 1), tx + 1, ty + 1);
-				ctx.globalAlpha = 1;
+			if (bleedPx > 0.5) {
+				ctx.save();
+				ctx.fillStyle = 'rgba(220,38,38,0.18)';
+				ctx.beginPath();
+				ctx.rect(contentX, contentY, contentW, contentH);
+				ctx.rect(cardX, cardY, cardWpx, cardHpx);
+				ctx.fill('evenodd');
+				ctx.restore();
 			}
-		}
+
+			// Piece boundary = the cut line (outer edge only).
+			if (showMarks) {
+				ctx.setLineDash([]);
+				ctx.lineWidth = 1;
+				ctx.strokeStyle = markColor;
+				ctx.strokeRect(cardX + 0.5, cardY + 0.5, cardWpx - 1, cardHpx - 1);
+			}
+
+			// Crop marks: corner ticks just outside each piece corner.
+			if (showMarks && s.cropMarks) {
+				ctx.strokeStyle = markColor;
+				ctx.lineWidth = 1;
+				ctx.beginPath();
+				var corners = [
+					[cardX, cardY, -1, -1],
+					[cardX + cardWpx, cardY, 1, -1],
+					[cardX, cardY + cardHpx, -1, 1],
+					[cardX + cardWpx, cardY + cardHpx, 1, 1]
+				];
+				corners.forEach(function (cnr) {
+					ctx.moveTo(cnr[0], cnr[1]);
+					ctx.lineTo(cnr[0] + cnr[2] * markLenPx, cnr[1]);
+					ctx.moveTo(cnr[0], cnr[1]);
+					ctx.lineTo(cnr[0], cnr[1] + cnr[3] * markLenPx);
+				});
+				ctx.stroke();
+			}
+
+			// Position label to help reassembly. Spans note their pocket extent.
+			var label = 'R' + (p.r0 + 1) + 'C' + (p.c0 + 1);
+			if (p.c1 > p.c0 || p.r1 > p.r0) {
+				label += ' span ' + (p.c1 - p.c0 + 1) + 'x' + (p.r1 - p.r0 + 1);
+			}
+			ctx.fillStyle = markColor;
+			ctx.globalAlpha = 0.65;
+			ctx.font = '10px sans-serif';
+			ctx.textBaseline = 'top';
+			ctx.textAlign = 'left';
+			ctx.fillText(label, tx + 1, ty + 1);
+			ctx.globalAlpha = 1;
+		}, this);
 	};
 
 	/**
-	 * Render one tile canvas at print resolution for grid cell (col, row).
+	 * Render one piece canvas at print resolution. The piece is a mm rectangle
+	 * (from `pieces()`) which may span multiple pockets; the image is sampled
+	 * from the same full-extent placement so every piece stays aligned.
 	 */
-	MichiApp.prototype.renderTileCanvas = function (col, row) {
+	MichiApp.prototype.renderPieceCanvas = function (piece) {
 		var s = this.state;
 		var art = this.artSizeMm();
 
@@ -877,11 +1274,11 @@
 		};
 
 		var bleedPx = s.bleedMm * PX_PER_MM;
-		var cardWpx = s.cardWidthMm * PX_PER_MM;
-		var cardHpx = s.cardHeightMm * PX_PER_MM;
+		var pieceWpx = piece.wMm * PX_PER_MM;
+		var pieceHpx = piece.hMm * PX_PER_MM;
 
-		var tileWpx = Math.round(cardWpx + 2 * bleedPx);
-		var tileHpx = Math.round(cardHpx + 2 * bleedPx);
+		var tileWpx = Math.round(pieceWpx + 2 * bleedPx);
+		var tileHpx = Math.round(pieceHpx + 2 * bleedPx);
 
 		var canvas = document.createElement('canvas');
 		canvas.width = tileWpx;
@@ -890,11 +1287,11 @@
 		ctx.fillStyle = '#ffffff';
 		ctx.fillRect(0, 0, tileWpx, tileHpx);
 
-		// Top-left of this tile (including bleed) in art-area pixel coords.
-		var tileOriginX = col * cardWpx - bleedPx;
-		var tileOriginY = row * cardHpx - bleedPx;
+		// Top-left of this piece (including bleed) in art-area pixel coords.
+		var tileOriginX = piece.xMm * PX_PER_MM - bleedPx;
+		var tileOriginY = piece.yMm * PX_PER_MM - bleedPx;
 
-		// Draw the placed image into the tile's coordinate space.
+		// Draw the placed image into the piece's coordinate space.
 		ctx.drawImage(
 			this.image,
 			place.dx - tileOriginX,
@@ -910,11 +1307,9 @@
 	 * Build the 8 crop-mark tick elements for a tile, positioned at the trim
 	 * box corners (inset by bleed + the reserved mark margin).
 	 */
-	MichiApp.prototype.buildCropMarks = function (color) {
+	MichiApp.prototype.buildCropMarks = function (color, trimWmm, trimHmm) {
 		var s = this.state;
 		var inset = MARK_MARGIN_MM + s.bleedMm; // distance from tile edge to trim line
-		var trimWmm = s.cardWidthMm;
-		var trimHmm = s.cardHeightMm;
 		var len = MARK_LEN_MM;
 		var marks = [];
 
@@ -953,7 +1348,7 @@
 	 * Build the cut-line rectangle drawn at the card (trim) boundary so the
 	 * print page clearly shows where to cut, matching the preview.
 	 */
-	MichiApp.prototype.buildCutLine = function (color) {
+	MichiApp.prototype.buildCutLine = function (color, trimWmm, trimHmm) {
 		var s = this.state;
 		var pad = s.cropMarks ? MARK_MARGIN_MM : 0;
 		var inset = pad + s.bleedMm;
@@ -961,7 +1356,7 @@
 			class: 'mm-cut-line',
 			style:
 				'left:' + inset + 'mm;top:' + inset + 'mm;' +
-				'width:' + s.cardWidthMm + 'mm;height:' + s.cardHeightMm + 'mm;' +
+				'width:' + trimWmm + 'mm;height:' + trimHmm + 'mm;' +
 				'border-color:' + color + ';'
 		});
 	};
@@ -974,37 +1369,41 @@
 		this.printRoot.innerHTML = '';
 
 		var pad = s.cropMarks ? MARK_MARGIN_MM : 0;
-		var tileOuterW = s.cardWidthMm + 2 * s.bleedMm + 2 * pad;
-		var tileOuterH = s.cardHeightMm + 2 * s.bleedMm + 2 * pad;
 		var markColor = this.markColorHex();
 
-		// Row-major order so printed tiles read like the original image.
-		for (var row = 0; row < s.rows; row++) {
-			for (var col = 0; col < s.cols; col++) {
-				var canvas = this.renderTileCanvas(col, row);
-				var img = canvas; // canvas prints fine directly
-				img.className = 'mm-tile-canvas';
-				img.style.width = (s.cardWidthMm + 2 * s.bleedMm) + 'mm';
-				img.style.height = (s.cardHeightMm + 2 * s.bleedMm) + 'mm';
-				img.style.left = pad + 'mm';
-				img.style.top = pad + 'mm';
+		// One printed tile per piece. Spanning pieces print as a single uncut
+		// strip; the seam-gap region inside them is printed but hides behind the
+		// pocket divider, keeping the art continuous across the windows.
+		var list = this.pieces();
+		for (var i = 0; i < list.length; i++) {
+			var piece = list[i];
+			var tileOuterW = piece.wMm + 2 * s.bleedMm + 2 * pad;
+			var tileOuterH = piece.hMm + 2 * s.bleedMm + 2 * pad;
 
-				// Cut line (where to cut) unless marks are disabled; crop ticks are optional.
-				var children = [img];
-				if (this.marksVisible()) {
-					children.push(this.buildCutLine(markColor));
-					if (s.cropMarks) {
-						children = children.concat(this.buildCropMarks(markColor));
-					}
+			var canvas = this.renderPieceCanvas(piece);
+			var img = canvas; // canvas prints fine directly
+			img.className = 'mm-tile-canvas';
+			img.style.width = (piece.wMm + 2 * s.bleedMm) + 'mm';
+			img.style.height = (piece.hMm + 2 * s.bleedMm) + 'mm';
+			img.style.left = pad + 'mm';
+			img.style.top = pad + 'mm';
+
+			// Cut line (outer boundary of the piece) unless marks are disabled;
+			// crop ticks are optional.
+			var children = [img];
+			if (this.marksVisible()) {
+				children.push(this.buildCutLine(markColor, piece.wMm, piece.hMm));
+				if (s.cropMarks) {
+					children = children.concat(this.buildCropMarks(markColor, piece.wMm, piece.hMm));
 				}
-
-				var tile = el('div', {
-					class: 'mm-tile',
-					style: 'width:' + tileOuterW + 'mm;height:' + tileOuterH + 'mm;'
-				}, children);
-
-				this.printRoot.appendChild(tile);
 			}
+
+			var tile = el('div', {
+				class: 'mm-tile',
+				style: 'width:' + tileOuterW + 'mm;height:' + tileOuterH + 'mm;'
+			}, children);
+
+			this.printRoot.appendChild(tile);
 		}
 
 		var cleanup = function () {

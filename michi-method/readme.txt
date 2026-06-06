@@ -20,14 +20,17 @@ a binder pocket and the full picture reassembles across the slots.
 Features:
 
 * Grid presets (1x1, 2x2, 3x3, 3x4) plus custom columns and rows.
-* Card type presets (Pokemon, Magic, One Piece, Lorcana, Yu-Gi-Oh!, Mini)
-  plus a custom size option in millimeters or inches.
+* Card type presets (Pokemon, Magic, One Piece, Lorcana, Yu-Gi-Oh!) plus a
+  custom size option (millimeters).
+* Span pockets without cutting: merge any rectangular group of pockets into a
+  single uncut piece (for the fold-the-page trick). A pocket seam gap setting
+  keeps the art continuous across the hidden divider between windows.
 * Starts at true size: the image is placed at 100% of its real size on the
   grid (no upscaling by default). Zoom in or out as needed; a quality badge
   warns if you enlarge it far enough to look pixelated.
 * Drag-to-reposition: drag the image in the preview to choose exactly what
   shows in each slot.
-* Optional bleed and crop / cut marks.
+* Optional bleed and crop / cut marks, with black, white, or no cut lines.
 * Live preview with two modes: assembled (see the reassembled picture) and
   per-card (see each print tile with its bleed margin and crop marks).
 * Prints at exact physical size via your browser's print dialog.
@@ -61,6 +64,13 @@ Nowhere. Everything is processed in the visitor's browser using the canvas
 API. No upload happens.
 
 == Changelog ==
+
+= 1.1.0 =
+* Add spanning: merge adjacent pockets into one uncut piece, with separate
+  vertical and horizontal pocket seam gaps so the art stays continuous across
+  the divider.
+* Add "None" option for cut line color.
+* Standardize sizes on millimeters.
 
 = 1.0.0 =
 * Initial release.

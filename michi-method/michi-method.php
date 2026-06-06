@@ -63,6 +63,8 @@ function michi_method_render_container( $atts = array() ) {
 		'card_width'  => 63,   // mm
 		'card_height' => 88,   // mm
 		'bleed'       => 0,    // mm
+		'vgap'        => 0,    // mm, vertical seam gap (between columns)
+		'hgap'        => 0,    // mm, horizontal seam gap (between rows)
 		'crop_marks'  => 'false',
 		'mark_color'  => 'black',
 		'units'       => 'mm',
@@ -77,16 +79,20 @@ function michi_method_render_container( $atts = array() ) {
 			' data-card-width-mm="%3$s"' .
 			' data-card-height-mm="%4$s"' .
 			' data-default-bleed-mm="%5$s"' .
-			' data-crop-marks="%6$s"' .
-			' data-mark-color="%7$s"' .
-			' data-default-units="%8$s">' .
-			'<noscript>%9$s</noscript>' .
+			' data-vgap-mm="%6$s"' .
+			' data-hgap-mm="%7$s"' .
+			' data-crop-marks="%8$s"' .
+			' data-mark-color="%9$s"' .
+			' data-default-units="%10$s">' .
+			'<noscript>%11$s</noscript>' .
 		'</div>',
 		esc_attr( $atts['cols'] ),
 		esc_attr( $atts['rows'] ),
 		esc_attr( $atts['card_width'] ),
 		esc_attr( $atts['card_height'] ),
 		esc_attr( $atts['bleed'] ),
+		esc_attr( $atts['vgap'] ),
+		esc_attr( $atts['hgap'] ),
 		esc_attr( $atts['crop_marks'] ),
 		esc_attr( $atts['mark_color'] ),
 		esc_attr( $atts['units'] ),
