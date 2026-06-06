@@ -116,7 +116,6 @@
 				return mc === 'white' || mc === 'none' ? mc : 'black';
 			})(root.getAttribute('data-mark-color')),
 			zoom: 1, // 1 = true size; only goes below 1 (never upscales)
-			previewMode: 'assembled',
 			offsetX: 0, // image pan within the grid, in mm (art-area coords)
 			offsetY: 0,
 			units: 'mm',
@@ -370,17 +369,6 @@
 		);
 		controls.appendChild(this.customSizeField);
 
-		// Preview mode.
-		this.viewSelect = el('select', { class: 'mm-select' }, [
-			el('option', { value: 'assembled', text: 'Assembled (reassembled image)' }),
-			el('option', { value: 'exploded', text: 'Per-card (print tiles)' })
-		]);
-		this.viewSelect.addEventListener('change', function () {
-			self.state.previewMode = self.viewSelect.value;
-			self.renderPreview();
-		});
-		controls.appendChild(this.field('Preview', this.viewSelect));
-
 		// Bleed.
 		this.bleedInput = el('input', { type: 'number', step: 'any', min: '0', class: 'mm-num' });
 		this.bleedInput.addEventListener('input', function () {
@@ -536,7 +524,6 @@
 		this.rowsInput.value = this.state.rows;
 		this.zoomInput.value = Math.round(this.state.zoom * 100);
 		this.updateZoomLabel();
-		this.viewSelect.value = this.state.previewMode;
 		this.cropToggle.checked = this.state.cropMarks;
 		this.markColorSelect.value = this.state.markColor;
 		this.cardPresetSelect.value = this.state.cardPreset;
@@ -669,13 +656,11 @@
 	/** Toggle the pocket-selection mode (vs image panning). */
 	MichiApp.prototype.setSelectMode = function (on) {
 		this.state.selectMode = !!on;
-		if (this.state.selectMode) {
-			// Selection only works against the assembled layout.
-			this.state.previewMode = 'assembled';
-			this.viewSelect.value = 'assembled';
-		} else {
+		if (!this.state.selectMode) {
 			this.state.selection = null;
 		}
+		// renderPreview shows the assembled grid while selecting (needed to pick
+		// pockets) and the per-card view otherwise.
 		this.renderPreview();
 	};
 
@@ -910,10 +895,12 @@
 
 		this.clampOffset();
 
-		if (this.state.previewMode === 'exploded') {
-			this.renderExplodedPreview(canvas);
-		} else {
+		// Per-card is the only preview, except while selecting pockets to span,
+		// which needs the assembled grid to pick from.
+		if (this.state.selectMode) {
 			this.renderAssembledPreview(canvas);
+		} else {
+			this.renderExplodedPreview(canvas);
 		}
 
 		canvas.classList.toggle('is-selecting', !!this.state.selectMode);
