@@ -108,6 +108,7 @@
 				return mc === 'white' || mc === 'none' ? mc : 'black';
 			})(root.getAttribute('data-mark-color')),
 			zoom: 1, // 1 = true size; only goes below 1 (never upscales)
+			rotation: 0, // image rotation in degrees: 0, 90, 180, 270
 			offsetX: 0, // image pan within the grid, in mm (art-area coords)
 			offsetY: 0,
 			units: 'mm',
@@ -252,9 +253,16 @@
 			}
 		});
 
+		// Rotate controls in the opposite corner of the preview box.
+		this.rotateBar = el('div', { class: 'mm-rotate-bar' }, [
+			el('button', { type: 'button', class: 'mm-rotate-btn', text: '\u21BA', title: 'Rotate left', onClick: function () { self.rotate(-1); } }),
+			el('button', { type: 'button', class: 'mm-rotate-btn', text: '\u21BB', title: 'Rotate right', onClick: function () { self.rotate(1); } })
+		]);
+
 		this.previewWrap = el('div', { class: 'mm-preview' }, [
 			this.dropzone,
 			this.changeButton,
+			this.rotateBar,
 			zoomBar,
 			this.gridStage,
 			this.previewHint
@@ -482,6 +490,45 @@
 		this.clearSpans();
 	};
 
+	/**
+	 * Rotate the image 90 degrees. dir = 1 (clockwise) or -1 (counter-clockwise).
+	 * We render a rotated copy into a canvas and use it as `this.image`, so the
+	 * rest of the pipeline (which reads width/height and draws it) is unchanged.
+	 */
+	MichiApp.prototype.rotate = function (dir) {
+		if (!this.sourceImage) {
+			return;
+		}
+		this.state.rotation = (this.state.rotation + dir * 90 + 360) % 360;
+		this.image = this.buildRotatedImage();
+		this.state.offsetX = 0;
+		this.state.offsetY = 0;
+		this.renderPreview();
+	};
+
+	/** Build a rotated copy of the source image for the current rotation. */
+	MichiApp.prototype.buildRotatedImage = function () {
+		var src = this.sourceImage;
+		var deg = this.state.rotation;
+		if (!src) {
+			return null;
+		}
+		if (deg === 0) {
+			return src;
+		}
+		var w = src.width;
+		var h = src.height;
+		var canvas = document.createElement('canvas');
+		var swap = deg === 90 || deg === 270;
+		canvas.width = swap ? h : w;
+		canvas.height = swap ? w : h;
+		var ctx = canvas.getContext('2d');
+		ctx.translate(canvas.width / 2, canvas.height / 2);
+		ctx.rotate((deg * Math.PI) / 180);
+		ctx.drawImage(src, -w / 2, -h / 2);
+		return canvas;
+	};
+
 	/** Add or remove columns/rows from the grid (clamped to 1..20). */
 	MichiApp.prototype.nudgeGrid = function (dCols, dRows) {
 		this.state.cols = Math.max(1, Math.min(20, this.state.cols + dCols));
@@ -520,6 +567,8 @@
 		reader.onload = function (e) {
 			var img = new Image();
 			img.onload = function () {
+				self.sourceImage = img;
+				self.state.rotation = 0;
 				self.image = img;
 				self.state.offsetX = 0;
 				self.state.offsetY = 0;

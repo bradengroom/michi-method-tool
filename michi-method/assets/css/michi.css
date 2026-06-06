@@ -232,6 +232,40 @@
 	color: var(--mm-accent);
 }
 
+.mm-rotate-bar {
+	display: none;
+	position: absolute;
+	top: 10px;
+	left: 10px;
+	z-index: 2;
+	gap: 6px;
+}
+
+.michi-method.has-image .mm-rotate-bar {
+	display: flex;
+}
+
+.mm-rotate-btn {
+	width: 32px;
+	height: 32px;
+	border-radius: 8px;
+	border: 1px solid var(--mm-border);
+	background: #fff;
+	color: #374151;
+	font-size: 18px;
+	line-height: 1;
+	cursor: pointer;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.mm-rotate-btn:hover {
+	border-color: var(--mm-accent);
+	color: var(--mm-accent);
+}
+
 /* The dropzone is the empty state and fills the combined box. */
 .mm-preview .mm-dropzone {
 	width: 100%;
