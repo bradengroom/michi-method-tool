@@ -1,0 +1,369 @@
+/* Michi Method Printer styles.
+ * Screen UI + print layout. The .mm-print-root is hidden on screen and the
+ * .mm-tool is hidden when printing.
+ */
+
+.michi-method {
+	--mm-border: #d8dbe0;
+	--mm-bg: #ffffff;
+	--mm-muted: #6b7280;
+	--mm-accent: #2563eb;
+	--mm-accent-contrast: #ffffff;
+	box-sizing: border-box;
+	max-width: 760px;
+	margin: 0 auto;
+	color: #111827;
+	font-size: 15px;
+	line-height: 1.45;
+}
+
+.michi-method *,
+.michi-method *::before,
+.michi-method *::after {
+	box-sizing: border-box;
+}
+
+/* ---- Dropzone ---- */
+.mm-dropzone {
+	border: 2px dashed var(--mm-border);
+	border-radius: 12px;
+	padding: 28px 20px;
+	text-align: center;
+	cursor: pointer;
+	background: #fafbfc;
+	transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.mm-dropzone:hover,
+.mm-dropzone:focus-visible,
+.mm-dropzone.is-dragover {
+	border-color: var(--mm-accent);
+	background: #f0f6ff;
+	outline: none;
+}
+
+.mm-dropzone-inner {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	pointer-events: none;
+}
+
+.mm-dropzone-inner strong {
+	font-size: 17px;
+}
+
+.mm-dropzone-inner small {
+	color: var(--mm-muted);
+}
+
+.mm-file-input {
+	display: none;
+}
+
+/* ---- Controls ---- */
+.mm-controls {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 14px 18px;
+	margin: 18px 0;
+}
+
+.mm-field {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.mm-label {
+	font-weight: 600;
+	font-size: 13px;
+	color: #374151;
+}
+
+.mm-inline {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.mm-x {
+	color: var(--mm-muted);
+}
+
+.mm-num,
+.mm-select {
+	width: 100%;
+	padding: 8px 10px;
+	border: 1px solid var(--mm-border);
+	border-radius: 8px;
+	font-size: 14px;
+	background: #fff;
+}
+
+.mm-num {
+	min-width: 0;
+}
+
+.mm-range {
+	flex: 1;
+	min-width: 0;
+}
+
+.mm-range-value {
+	min-width: 42px;
+	text-align: right;
+	font-variant-numeric: tabular-nums;
+	color: #374151;
+}
+
+.mm-presets {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+
+.mm-preset {
+	padding: 7px 12px;
+	border: 1px solid var(--mm-border);
+	border-radius: 999px;
+	background: #fff;
+	cursor: pointer;
+	font-size: 13px;
+}
+
+.mm-preset:hover {
+	border-color: var(--mm-accent);
+}
+
+.mm-preset.is-active {
+	background: var(--mm-accent);
+	border-color: var(--mm-accent);
+	color: var(--mm-accent-contrast);
+}
+
+.mm-checkline {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	cursor: pointer;
+}
+
+/* ---- Preview ---- */
+.mm-preview {
+	margin: 8px 0 18px;
+	padding: 12px;
+	border: 1px solid var(--mm-border);
+	border-radius: 12px;
+	background: #f3f4f6;
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	align-items: center;
+	gap: 8px;
+	min-height: 120px;
+}
+
+.mm-preview-empty {
+	color: var(--mm-muted);
+}
+
+.mm-preview-canvas {
+	display: none;
+	max-width: 100%;
+	box-shadow: 0 1px 4px rgba(0, 0, 0, 0.15);
+	background: #fff;
+	cursor: grab;
+	touch-action: none;
+}
+
+.mm-preview-canvas.is-dragging {
+	cursor: grabbing;
+}
+
+.mm-preview-hint {
+	display: none;
+	color: var(--mm-muted);
+	font-size: 12px;
+}
+
+.michi-method.has-image .mm-preview-hint {
+	display: block;
+}
+
+/* ---- Resolution / quality badge ---- */
+.mm-quality {
+	margin: 0 0 16px;
+	padding: 10px 14px;
+	border-radius: 10px;
+	border: 1px solid transparent;
+	display: flex;
+	flex-direction: column;
+	gap: 3px;
+	font-size: 13px;
+}
+
+.mm-quality strong {
+	font-size: 14px;
+}
+
+.mm-quality-detail {
+	opacity: 0.85;
+}
+
+.mm-quality--info {
+	background: #f1f5f9;
+	border-color: #e2e8f0;
+	color: #334155;
+}
+
+.mm-quality--good {
+	background: #ecfdf5;
+	border-color: #a7f3d0;
+	color: #065f46;
+}
+
+.mm-quality--fair {
+	background: #eff6ff;
+	border-color: #bfdbfe;
+	color: #1e40af;
+}
+
+.mm-quality--warn {
+	background: #fffbeb;
+	border-color: #fde68a;
+	color: #92400e;
+}
+
+.mm-quality--low {
+	background: #fef2f2;
+	border-color: #fecaca;
+	color: #991b1b;
+}
+
+/* ---- Actions / tips ---- */
+.mm-actions {
+	display: flex;
+	gap: 10px;
+}
+
+.mm-print-btn {
+	padding: 12px 22px;
+	border: none;
+	border-radius: 10px;
+	background: var(--mm-accent);
+	color: var(--mm-accent-contrast);
+	font-size: 16px;
+	font-weight: 600;
+	cursor: pointer;
+}
+
+.mm-print-btn:disabled {
+	background: #9ca3af;
+	cursor: not-allowed;
+}
+
+.mm-reset-btn {
+	padding: 12px 18px;
+	border: 1px solid var(--mm-border);
+	border-radius: 10px;
+	background: #fff;
+	color: #374151;
+	font-size: 14px;
+	cursor: pointer;
+}
+
+.mm-reset-btn:hover {
+	border-color: var(--mm-accent);
+}
+
+.mm-tips {
+	margin-top: 14px;
+	padding: 12px 14px;
+	border-radius: 10px;
+	background: #fff7ed;
+	border: 1px solid #fed7aa;
+	font-size: 13px;
+	color: #7c2d12;
+}
+
+@media (max-width: 540px) {
+	.mm-controls {
+		grid-template-columns: 1fr;
+	}
+}
+
+/* ---- Print output (hidden on screen) ---- */
+.mm-print-root {
+	display: none;
+}
+
+.mm-tile-canvas {
+	position: absolute;
+	display: block;
+}
+
+@media screen {
+	.mm-print-root {
+		display: none !important;
+	}
+}
+
+@media print {
+	/* Hide the entire page except our print root. */
+	body * {
+		visibility: hidden !important;
+	}
+
+	.michi-method .mm-print-root,
+	.michi-method .mm-print-root * {
+		visibility: visible !important;
+	}
+
+	.michi-method {
+		max-width: none;
+		margin: 0;
+	}
+
+	.mm-tool {
+		display: none !important;
+	}
+
+	.mm-print-root {
+		display: flex !important;
+		flex-wrap: wrap;
+		align-content: flex-start;
+		gap: 0;
+		position: absolute;
+		left: 0;
+		top: 0;
+	}
+
+	.mm-tile {
+		position: relative;
+		page-break-inside: avoid;
+		break-inside: avoid;
+		overflow: visible;
+	}
+
+	.mm-crop-tick {
+		position: absolute;
+		background: #000;
+		-webkit-print-color-adjust: exact;
+		print-color-adjust: exact;
+	}
+
+	.mm-cut-line {
+		position: absolute;
+		box-sizing: border-box;
+		border: 0.2mm solid #000;
+		background: transparent;
+		pointer-events: none;
+		-webkit-print-color-adjust: exact;
+		print-color-adjust: exact;
+	}
+
+	@page {
+		margin: 8mm;
+	}
+}

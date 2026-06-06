@@ -1,0 +1,23 @@
+{
+	"$schema": "https://schemas.wp.org/trunk/block.json",
+	"apiVersion": 2,
+	"name": "michi-method/printer",
+	"version": "1.0.0",
+	"title": "Michi Method Printer",
+	"category": "widgets",
+	"icon": "grid-view",
+	"description": "Slice an image into Pokemon-card-sized tiles for binder slots and print at exact size.",
+	"keywords": ["pokemon", "binder", "print", "michi", "card"],
+	"textdomain": "michi-method",
+	"attributes": {
+		"cols": { "type": "number", "default": 3 },
+		"rows": { "type": "number", "default": 3 },
+		"cardWidth": { "type": "number", "default": 63 },
+		"cardHeight": { "type": "number", "default": 88 }
+	},
+	"supports": {
+		"html": false,
+		"align": ["wide", "full"]
+	},
+	"editorScript": "file:./index.js"
+}
