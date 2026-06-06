@@ -15,14 +15,6 @@
 	var MARK_MARGIN_MM = 4; // Reserved gutter around a tile for crop marks.
 	var MARK_LEN_MM = 3; // Length of each crop-mark tick.
 
-	var PRESETS = [
-		{ label: '1 x 1', cols: 1, rows: 1 },
-		{ label: '2 x 2', cols: 2, rows: 2 },
-		{ label: '3 x 3', cols: 3, rows: 3 },
-		{ label: '3 x 4', cols: 3, rows: 4 },
-		{ label: 'Custom', cols: 0, rows: 0 }
-	];
-
 	// Common trading-card sizes in millimeters. Several games share the 63x88mm
 	// "standard" size; they are listed separately so the common case is obvious.
 	var CARD_PRESETS = [
@@ -105,7 +97,7 @@
 		this.image = null; // HTMLImageElement once loaded.
 		this.state = {
 			cols: parseInt(root.getAttribute('data-default-cols'), 10) || 3,
-			rows: parseInt(root.getAttribute('data-default-rows'), 10) || 3,
+			rows: parseInt(root.getAttribute('data-default-rows'), 10) || 1,
 			cardWidthMm: parseFloat(root.getAttribute('data-card-width-mm')) || 63,
 			cardHeightMm: parseFloat(root.getAttribute('data-card-height-mm')) || 88,
 			bleedMm: parseFloat(root.getAttribute('data-default-bleed-mm')) || 0,
@@ -285,35 +277,17 @@
 		var self = this;
 		var controls = el('div', { class: 'mm-controls' });
 
-		// Grid preset buttons.
-		this.presetWrap = el('div', { class: 'mm-presets' });
-		PRESETS.forEach(function (preset) {
-			var btn = el('button', {
-				type: 'button',
-				class: 'mm-preset',
-				text: preset.label,
-				onClick: function () {
-					self.applyPreset(preset);
-				}
-			});
-			btn._preset = preset;
-			self.presetWrap.appendChild(btn);
-		});
-		controls.appendChild(this.field('Binder grid', this.presetWrap));
-
-		// Custom cols/rows.
+		// Columns x rows.
 		this.colsInput = el('input', { type: 'number', min: '1', max: '20', class: 'mm-num' });
 		this.rowsInput = el('input', { type: 'number', min: '1', max: '20', class: 'mm-num' });
 		this.colsInput.addEventListener('input', function () {
 			self.state.cols = Math.max(1, parseInt(self.colsInput.value, 10) || 1);
 			self.clearSpans(); // pocket indices change with the grid
-			self.syncPresetSelection();
 			self.renderPreview();
 		});
 		this.rowsInput.addEventListener('input', function () {
 			self.state.rows = Math.max(1, parseInt(self.rowsInput.value, 10) || 1);
 			self.clearSpans();
-			self.syncPresetSelection();
 			self.renderPreview();
 		});
 		controls.appendChild(
@@ -485,40 +459,6 @@
 		return el('label', { class: 'mm-field' }, children);
 	};
 
-	MichiApp.prototype.applyPreset = function (preset) {
-		if (preset.cols > 0) {
-			if (preset.cols !== this.state.cols || preset.rows !== this.state.rows) {
-				this.clearSpans();
-			}
-			this.state.cols = preset.cols;
-			this.state.rows = preset.rows;
-		}
-		this.refreshControlValues();
-		this.syncPresetSelection();
-		this.renderPreview();
-		if (preset.cols === 0) {
-			this.colsInput.focus();
-		}
-	};
-
-	MichiApp.prototype.syncPresetSelection = function () {
-		var self = this;
-		var matched = false;
-		Array.prototype.forEach.call(this.presetWrap.children, function (btn) {
-			var p = btn._preset;
-			var active = p.cols === self.state.cols && p.rows === self.state.rows && p.cols > 0;
-			if (active) {
-				matched = true;
-			}
-			btn.classList.toggle('is-active', active);
-		});
-		Array.prototype.forEach.call(this.presetWrap.children, function (btn) {
-			if (btn._preset.cols === 0) {
-				btn.classList.toggle('is-active', !matched);
-			}
-		});
-	};
-
 	MichiApp.prototype.refreshControlValues = function () {
 		this.colsInput.value = this.state.cols;
 		this.rowsInput.value = this.state.rows;
@@ -536,7 +476,6 @@
 		var unitLabel = this.state.units;
 		this.cardWInput.setAttribute('aria-label', 'Card width in ' + unitLabel);
 		this.cardHInput.setAttribute('aria-label', 'Card height in ' + unitLabel);
-		this.syncPresetSelection();
 	};
 
 	MichiApp.prototype.loadFile = function (file) {

@@ -59,7 +59,7 @@ add_action( 'init', 'michi_method_register_assets' );
 function michi_method_render_container( $atts = array() ) {
 	$defaults = array(
 		'cols'        => 3,
-		'rows'        => 3,
+		'rows'        => 1,
 		'card_width'  => 63,   // mm
 		'card_height' => 88,   // mm
 		'bleed'       => 0,    // mm
