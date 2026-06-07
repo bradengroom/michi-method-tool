@@ -1115,39 +1115,29 @@
 	MichiApp.prototype.renderExplodedPreview = function (canvas) {
 		var s = this.state;
 
-		// Lay pieces out in a greedy wrapping flow, since spanning pieces have
-		// varying sizes and no longer fit a uniform grid.
+		// Lay pieces out on the actual grid: every piece keeps its column/row
+		// position, and a merged span simply fills its block (the gap between
+		// the merged cells is filled in with the continuous art).
 		var unitWmm = this.cellWmm();
 		var unitHmm = this.cellHmm();
 		var gapMm = Math.max(unitWmm, unitHmm) * 0.14;
-		var maxRowWmm = s.cols * unitWmm + Math.max(0, s.cols - 1) * gapMm;
+		var totalWmm = s.cols * unitWmm + Math.max(0, s.cols - 1) * gapMm;
+		var totalHmm = s.rows * unitHmm + Math.max(0, s.rows - 1) * gapMm;
 
 		var list = this.pieces();
-		var layout = [];
-		var cx = 0;
-		var cy = 0;
-		var rowH = 0;
-		var totalWmm = 0;
-		list.forEach(function (p) {
-			var tw = p.wMm;
-			var th = p.hMm;
-			if (cx > 0 && cx + tw > maxRowWmm + 0.01) {
-				cy += rowH + gapMm;
-				cx = 0;
-				rowH = 0;
-			}
-			layout.push({ p: p, x: cx, y: cy, tw: tw, th: th });
-			cx += tw + gapMm;
-			if (th > rowH) {
-				rowH = th;
-			}
-			if (cx - gapMm > totalWmm) {
-				totalWmm = cx - gapMm;
-			}
+		var layout = list.map(function (p) {
+			var span = p.c1 - p.c0;
+			var down = p.r1 - p.r0;
+			return {
+				p: p,
+				x: p.c0 * (unitWmm + gapMm),
+				y: p.r0 * (unitHmm + gapMm),
+				tw: (span + 1) * unitWmm + span * gapMm,
+				th: (down + 1) * unitHmm + down * gapMm
+			};
 		});
-		var totalHmm = cy + rowH;
 		if (totalWmm <= 0) {
-			totalWmm = maxRowWmm;
+			totalWmm = unitWmm;
 		}
 		if (totalHmm <= 0) {
 			totalHmm = unitHmm;
@@ -1189,8 +1179,8 @@
 
 			var contentX = tx;
 			var contentY = ty;
-			var cardWpx = p.wMm * scale;
-			var cardHpx = p.hMm * scale;
+			var cardWpx = item.tw * scale;
+			var cardHpx = item.th * scale;
 
 			var pieceCanvas = this.renderPieceCanvas(p);
 			ctx.fillStyle = '#ffffff';
