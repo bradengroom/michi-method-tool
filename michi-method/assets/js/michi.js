@@ -69,6 +69,7 @@
 			rows: parseInt(root.getAttribute('data-default-rows'), 10) || 1,
 			cardWidthMm: parseFloat(root.getAttribute('data-card-width-mm')) || 63,
 			cardHeightMm: parseFloat(root.getAttribute('data-card-height-mm')) || 88,
+			spanEnabled: root.getAttribute('data-span-enabled') === 'true', // off by default
 			vGapMm: parseFloat(root.getAttribute('data-vgap-mm')) || 0, // vertical seam (between columns)
 			hGapMm: parseFloat(root.getAttribute('data-hgap-mm')) || 0, // horizontal seam (between rows)
 			markColor: (function (mc) {
@@ -101,6 +102,17 @@
 	};
 	MichiApp.prototype.cellHmm = function () {
 		return this.state.cardHeightMm;
+	};
+
+	/** Seam gaps and spans only take effect when spanning is enabled. */
+	MichiApp.prototype.vGap = function () {
+		return this.state.spanEnabled ? Math.max(0, this.state.vGapMm || 0) : 0;
+	};
+	MichiApp.prototype.hGap = function () {
+		return this.state.spanEnabled ? Math.max(0, this.state.hGapMm || 0) : 0;
+	};
+	MichiApp.prototype.activeSpans = function () {
+		return this.state.spanEnabled ? (this.state.spans || []) : [];
 	};
 
 	MichiApp.prototype.markColorHex = function () {
@@ -325,6 +337,21 @@
 			)
 		);
 
+		// Master toggle for the whole spanning feature. When off, the seam-gap
+		// inputs and pocket-selection controls below are hidden, and spanning
+		// has no effect on the geometry.
+		this.spanEnableToggle = el('input', { type: 'checkbox', class: 'mm-check' });
+		this.spanEnableToggle.addEventListener('change', function () {
+			self.setSpanEnabled(self.spanEnableToggle.checked);
+		});
+		var spanEnableField = el('div', { class: 'mm-field mm-field--wide' }, [
+			el('label', { class: 'mm-checkline' }, [
+				this.spanEnableToggle,
+				el('span', { text: 'Span artwork across multiple pockets' })
+			])
+		]);
+		controls.appendChild(spanEnableField);
+
 		// Seam gaps: the dead strip between pocket windows. Used so a piece that
 		// spans multiple pockets stays visually continuous across the divider.
 		this.vGapInput = el('input', { type: 'number', step: 'any', min: '0', class: 'mm-num' });
@@ -337,16 +364,18 @@
 			self.state.hGapMm = Math.max(0, self.fromDisplay(self.hGapInput.value));
 			self.renderPreview();
 		});
-		controls.appendChild(
-			this.field(
-				'Pocket seam gap (mm): vertical x horizontal',
-				el('div', { class: 'mm-inline' }, [
-					this.vGapInput,
-					el('span', { class: 'mm-x', text: 'x' }),
-					this.hGapInput
-				])
-			)
+		this.seamGapField = this.field(
+			'Pocket seam gap (mm): width x height',
+			el('div', { class: 'mm-inline' }, [
+				this.vGapInput,
+				el('span', { class: 'mm-x', text: 'x' }),
+				this.hGapInput
+			]),
+			'The empty space between two binder pockets. The art prints continuously ' +
+				'across this gap between pockets. About 2mm width works well for a ' +
+				'VaultX binder.'
 		);
+		controls.appendChild(this.seamGapField);
 
 		// Spanning: merge adjacent pockets into one uncut piece.
 		this.selectToggle = el('button', {
@@ -383,7 +412,7 @@
 			}
 		});
 		this.spanHint = el('div', { class: 'mm-span-hint' });
-		var spanField = this.field(
+		this.spanField = this.field(
 			'Span pockets (uncut)',
 			el('div', { class: 'mm-span-controls' }, [
 				this.selectToggle,
@@ -393,8 +422,8 @@
 				this.spanHint
 			])
 		);
-		spanField.classList.add('mm-field--wide');
-		controls.appendChild(spanField);
+		this.spanField.classList.add('mm-field--wide');
+		controls.appendChild(this.spanField);
 
 		// Cut lines: a single toggle reveals a native color picker. Toggling off
 		// is the "None" option (the native picker has no "none" of its own).
@@ -524,6 +553,7 @@
 		this.cardHInput.value = this.toDisplay(this.state.cardHeightMm);
 		this.vGapInput.value = this.toDisplay(this.state.vGapMm);
 		this.hGapInput.value = this.toDisplay(this.state.hGapMm);
+		this.syncSpanControls();
 		var unitLabel = this.state.units;
 		this.cardWInput.setAttribute('aria-label', 'Card width in ' + unitLabel);
 		this.cardHInput.setAttribute('aria-label', 'Card height in ' + unitLabel);
@@ -566,22 +596,21 @@
 	MichiApp.prototype.artSizeMm = function () {
 		var s = this.state;
 		return {
-			w: s.cols * this.cellWmm() + Math.max(0, s.cols - 1) * s.vGapMm,
-			h: s.rows * this.cellHmm() + Math.max(0, s.rows - 1) * s.hGapMm
+			w: s.cols * this.cellWmm() + Math.max(0, s.cols - 1) * this.vGap(),
+			h: s.rows * this.cellHmm() + Math.max(0, s.rows - 1) * this.hGap()
 		};
 	};
 
 	/** Left/top of a pocket window, in mm (within the trim area). */
 	MichiApp.prototype.pocketX = function (col) {
-		return col * (this.cellWmm() + this.state.vGapMm);
+		return col * (this.cellWmm() + this.vGap());
 	};
 	MichiApp.prototype.pocketY = function (row) {
-		return row * (this.cellHmm() + this.state.hGapMm);
+		return row * (this.cellHmm() + this.hGap());
 	};
 
 	/** The mm rectangle of a span/cell {c0,r0,c1,r1}, including internal seam gaps. */
 	MichiApp.prototype.pieceRectMm = function (span) {
-		var s = this.state;
 		return {
 			c0: span.c0,
 			r0: span.r0,
@@ -589,14 +618,14 @@
 			r1: span.r1,
 			xMm: this.pocketX(span.c0),
 			yMm: this.pocketY(span.r0),
-			wMm: (span.c1 - span.c0 + 1) * this.cellWmm() + (span.c1 - span.c0) * s.vGapMm,
-			hMm: (span.r1 - span.r0 + 1) * this.cellHmm() + (span.r1 - span.r0) * s.hGapMm
+			wMm: (span.c1 - span.c0 + 1) * this.cellWmm() + (span.c1 - span.c0) * this.vGap(),
+			hMm: (span.r1 - span.r0 + 1) * this.cellHmm() + (span.r1 - span.r0) * this.hGap()
 		};
 	};
 
 	/** Index into state.spans for the span covering (col,row), or -1 if uncovered. */
 	MichiApp.prototype.spanIndexForCell = function (col, row) {
-		var spans = this.state.spans || [];
+		var spans = this.activeSpans();
 		for (var i = 0; i < spans.length; i++) {
 			var sp = spans[i];
 			if (col >= sp.c0 && col <= sp.c1 && row >= sp.r0 && row <= sp.r1) {
@@ -616,7 +645,7 @@
 		var self = this;
 		var list = [];
 		var covered = {};
-		(s.spans || []).forEach(function (sp) {
+		this.activeSpans().forEach(function (sp) {
 			if (sp.c0 < 0 || sp.r0 < 0 || sp.c1 >= s.cols || sp.r1 >= s.rows || sp.c1 < sp.c0 || sp.r1 < sp.r0) {
 				return;
 			}
@@ -656,6 +685,31 @@
 		// renderPreview shows the assembled grid while selecting (needed to pick
 		// pockets) and the per-card view otherwise.
 		this.renderPreview();
+	};
+
+	/** Enable/disable the whole spanning feature (seam gaps + pocket merging). */
+	MichiApp.prototype.setSpanEnabled = function (on) {
+		this.state.spanEnabled = !!on;
+		if (!this.state.spanEnabled) {
+			this.state.selectMode = false;
+			this.state.selection = null;
+		}
+		this.syncSpanControls();
+		this.renderPreview();
+	};
+
+	/** Show or hide the seam-gap and pocket-selection controls. */
+	MichiApp.prototype.syncSpanControls = function () {
+		var on = this.state.spanEnabled;
+		if (this.seamGapField) {
+			this.seamGapField.style.display = on ? '' : 'none';
+		}
+		if (this.spanField) {
+			this.spanField.style.display = on ? '' : 'none';
+		}
+		if (this.spanEnableToggle) {
+			this.spanEnableToggle.checked = on;
+		}
 	};
 
 	/** Merge the current selection into one uncut spanning piece. */
@@ -932,8 +986,8 @@
 		this._previewPxPerMm = scale;
 		var cellW = this.cellWmm() * scale;
 		var cellH = this.cellHmm() * scale;
-		var vGapPx = s.vGapMm * scale;
-		var hGapPx = s.hGapMm * scale;
+		var vGapPx = this.vGap() * scale;
+		var hGapPx = this.hGap() * scale;
 		var ox = 0; // trim-area origin within the canvas
 		var oy = 0;
 
