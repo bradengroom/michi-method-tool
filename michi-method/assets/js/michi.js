@@ -14,35 +14,6 @@
 	var PX_PER_MM = PRINT_DPI / MM_PER_INCH;
 
 	// Common trading-card sizes in millimeters. Several games share the 63x88mm
-	// "standard" size; they are listed separately so the common case is obvious.
-	var CARD_PRESETS = [
-		{ id: 'pokemon', label: 'Pokemon (63 x 88 mm)', w: 63, h: 88 },
-		{ id: 'mtg', label: 'Magic: The Gathering (63 x 88 mm)', w: 63, h: 88 },
-		{ id: 'onepiece', label: 'One Piece (63 x 88 mm)', w: 63, h: 88 },
-		{ id: 'lorcana', label: 'Lorcana (63 x 88 mm)', w: 63, h: 88 },
-		{ id: 'yugioh', label: 'Yu-Gi-Oh! (59 x 86 mm)', w: 59, h: 86 },
-		{ id: 'custom', label: 'Custom size', w: 0, h: 0 }
-	];
-
-	function cardPresetById(id) {
-		for (var i = 0; i < CARD_PRESETS.length; i++) {
-			if (CARD_PRESETS[i].id === id) {
-				return CARD_PRESETS[i];
-			}
-		}
-		return null;
-	}
-
-	function detectCardPreset(wmm, hmm) {
-		for (var i = 0; i < CARD_PRESETS.length; i++) {
-			var p = CARD_PRESETS[i];
-			if (p.id !== 'custom' && p.w === wmm && p.h === hmm) {
-				return p.id;
-			}
-		}
-		return 'custom';
-	}
-
 	function el(tag, attrs, children) {
 		var node = document.createElement(tag);
 		attrs = attrs || {};
@@ -119,11 +90,18 @@
 			selectMode: false, // when true, dragging selects pockets instead of panning
 			selection: null // committed selection rect {c0,r0,c1,r1} or null
 		};
-		this.state.cardPreset = detectCardPreset(this.state.cardWidthMm, this.state.cardHeightMm);
 		this.build();
 		this.refreshControlValues();
 		this.renderPreview();
 	}
+
+	/** Printed cell size in mm (the user-entered card size). */
+	MichiApp.prototype.cellWmm = function () {
+		return this.state.cardWidthMm;
+	};
+	MichiApp.prototype.cellHmm = function () {
+		return this.state.cardHeightMm;
+	};
 
 	MichiApp.prototype.markColorHex = function () {
 		return this.state.markColor;
@@ -322,28 +300,8 @@
 
 		// Grid columns/rows are set with the +/- steppers on the grid edges.
 
-		// Card type preset (sets the per-slot size).
-		this.cardPresetSelect = el(
-			'select',
-			{ class: 'mm-select' },
-			CARD_PRESETS.map(function (p) {
-				return el('option', { value: p.id, text: p.label });
-			})
-		);
-		this.cardPresetSelect.addEventListener('change', function () {
-			var id = self.cardPresetSelect.value;
-			self.state.cardPreset = id;
-			var preset = cardPresetById(id);
-			if (preset && id !== 'custom') {
-				self.state.cardWidthMm = preset.w;
-				self.state.cardHeightMm = preset.h;
-			}
-			self.refreshControlValues();
-			self.renderPreview();
-		});
-		controls.appendChild(this.field('Card type', this.cardPresetSelect));
-
-		// Custom size inputs, shown only when "Custom size" is chosen.
+		// Card size: a single width x height in mm. Defaults to a Pokemon card;
+		// the tooltip suggests sizes for a snugger sleeve or VaultX pocket fit.
 		this.cardWInput = el('input', { type: 'number', step: 'any', min: '1', class: 'mm-num' });
 		this.cardHInput = el('input', { type: 'number', step: 'any', min: '1', class: 'mm-num' });
 		this.cardWInput.addEventListener('input', function () {
@@ -354,15 +312,18 @@
 			self.state.cardHeightMm = self.fromDisplay(self.cardHInput.value);
 			self.renderPreview();
 		});
-		this.customSizeField = this.field(
-			'Custom card size (mm)',
-			el('div', { class: 'mm-inline' }, [
-				this.cardWInput,
-				el('span', { class: 'mm-x', text: 'x' }),
-				this.cardHInput
-			])
+		controls.appendChild(
+			this.field(
+				'Card size (mm)',
+				el('div', { class: 'mm-inline' }, [
+					this.cardWInput,
+					el('span', { class: 'mm-x', text: 'x' }),
+					this.cardHInput
+				]),
+				'63x88mm matches a Pokemon card. 64x89mm is more snug in a TCG ' +
+					'sleeve, and 70x95mm more completely fills a VaultX binder pocket.'
+			)
 		);
-		controls.appendChild(this.customSizeField);
 
 		// Seam gaps: the dead strip between pocket windows. Used so a piece that
 		// spans multiple pockets stays visually continuous across the divider.
@@ -458,10 +419,27 @@
 		return controls;
 	};
 
-	MichiApp.prototype.field = function (label, control) {
+	MichiApp.prototype.field = function (label, control, help) {
 		var children = [];
 		if (label) {
-			children.push(el('span', { class: 'mm-label', text: label }));
+			var labelChildren = [el('span', { text: label })];
+			if (help) {
+				labelChildren.push(
+					el('span', {
+						class: 'mm-help',
+						'aria-label': help,
+						// Inside a <label>, a click would focus the field's input;
+						// suppress that so the help icon is purely informational.
+						onclick: function (e) {
+							e.preventDefault();
+						}
+					}, [
+						el('span', { class: 'mm-help-icon', text: '?' }),
+						el('span', { class: 'mm-tooltip', text: help })
+					])
+				);
+			}
+			children.push(el('span', { class: 'mm-label' }, labelChildren));
 		}
 		children.push(control);
 		return el('label', { class: 'mm-field' }, children);
@@ -479,8 +457,8 @@
 		var s = this.state;
 		var physWmm = this.image.width / PX_PER_MM;
 		var physHmm = this.image.height / PX_PER_MM;
-		var cols = Math.round(physWmm / s.cardWidthMm);
-		var rows = Math.round(physHmm / s.cardHeightMm);
+		var cols = Math.round(physWmm / this.cellWmm());
+		var rows = Math.round(physHmm / this.cellHmm());
 		s.cols = Math.max(1, Math.min(3, cols || 1));
 		s.rows = Math.max(1, Math.min(3, rows || 1));
 		this.clearSpans();
@@ -542,8 +520,6 @@
 		this.markShowToggle.checked = this.state.showMarks;
 		this.markColorInput.value = this.state.markColor;
 		this.syncCutLineControl();
-		this.cardPresetSelect.value = this.state.cardPreset;
-		this.customSizeField.style.display = this.state.cardPreset === 'custom' ? '' : 'none';
 		this.cardWInput.value = this.toDisplay(this.state.cardWidthMm);
 		this.cardHInput.value = this.toDisplay(this.state.cardHeightMm);
 		this.vGapInput.value = this.toDisplay(this.state.vGapMm);
@@ -590,17 +566,17 @@
 	MichiApp.prototype.artSizeMm = function () {
 		var s = this.state;
 		return {
-			w: s.cols * s.cardWidthMm + Math.max(0, s.cols - 1) * s.vGapMm,
-			h: s.rows * s.cardHeightMm + Math.max(0, s.rows - 1) * s.hGapMm
+			w: s.cols * this.cellWmm() + Math.max(0, s.cols - 1) * s.vGapMm,
+			h: s.rows * this.cellHmm() + Math.max(0, s.rows - 1) * s.hGapMm
 		};
 	};
 
 	/** Left/top of a pocket window, in mm (within the trim area). */
 	MichiApp.prototype.pocketX = function (col) {
-		return col * (this.state.cardWidthMm + this.state.vGapMm);
+		return col * (this.cellWmm() + this.state.vGapMm);
 	};
 	MichiApp.prototype.pocketY = function (row) {
-		return row * (this.state.cardHeightMm + this.state.hGapMm);
+		return row * (this.cellHmm() + this.state.hGapMm);
 	};
 
 	/** The mm rectangle of a span/cell {c0,r0,c1,r1}, including internal seam gaps. */
@@ -613,8 +589,8 @@
 			r1: span.r1,
 			xMm: this.pocketX(span.c0),
 			yMm: this.pocketY(span.r0),
-			wMm: (span.c1 - span.c0 + 1) * s.cardWidthMm + (span.c1 - span.c0) * s.vGapMm,
-			hMm: (span.r1 - span.r0 + 1) * s.cardHeightMm + (span.r1 - span.r0) * s.hGapMm
+			wMm: (span.c1 - span.c0 + 1) * this.cellWmm() + (span.c1 - span.c0) * s.vGapMm,
+			hMm: (span.r1 - span.r0 + 1) * this.cellHmm() + (span.r1 - span.r0) * s.hGapMm
 		};
 	};
 
@@ -954,8 +930,8 @@
 
 		var scale = viewW / art.w; // preview px per mm
 		this._previewPxPerMm = scale;
-		var cellW = s.cardWidthMm * scale;
-		var cellH = s.cardHeightMm * scale;
+		var cellW = this.cellWmm() * scale;
+		var cellH = this.cellHmm() * scale;
 		var vGapPx = s.vGapMm * scale;
 		var hGapPx = s.hGapMm * scale;
 		var ox = 0; // trim-area origin within the canvas
@@ -1081,8 +1057,8 @@
 
 		// Lay pieces out in a greedy wrapping flow, since spanning pieces have
 		// varying sizes and no longer fit a uniform grid.
-		var unitWmm = s.cardWidthMm;
-		var unitHmm = s.cardHeightMm;
+		var unitWmm = this.cellWmm();
+		var unitHmm = this.cellHmm();
 		var gapMm = Math.max(unitWmm, unitHmm) * 0.14;
 		var maxRowWmm = s.cols * unitWmm + Math.max(0, s.cols - 1) * gapMm;
 

@@ -19,9 +19,9 @@ a binder pocket and the full picture reassembles across the slots.
 
 Features:
 
-* Grid presets (1x1, 2x2, 3x3, 3x4) plus custom columns and rows.
-* Card type presets (Pokemon, Magic, One Piece, Lorcana, Yu-Gi-Oh!) plus a
-  custom size option (millimeters).
+* Set the grid with simple columns x rows steppers on the grid edges.
+* Card size in millimeters (defaults to a 63x88mm Pokemon card). Enter a
+  slightly larger size to fill a sleeve or VaultX binder pocket more snugly.
 * Span pockets without cutting: merge any rectangular group of pockets into a
   single uncut piece (for the fold-the-page trick). A pocket seam gap setting
   keeps the art continuous across the hidden divider between windows.
@@ -30,7 +30,7 @@ Features:
   warns if you enlarge it far enough to look pixelated.
 * Drag-to-reposition: drag the image in the preview to choose exactly what
   shows in each slot.
-* Cut lines, with black, white, or no lines.
+* Cut lines in any color, or toggled off entirely.
 * Live per-card preview: see each print tile with its cut line.
 * Prints at exact physical size via your browser's print dialog.
 
