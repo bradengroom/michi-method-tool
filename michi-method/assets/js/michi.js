@@ -280,7 +280,7 @@
 		this.printButton = el('button', {
 			type: 'button',
 			class: 'mm-print-btn',
-			text: 'Print tiles',
+			text: 'Print Tiles',
 			disabled: 'disabled',
 			onClick: function () {
 				self.print();
@@ -289,12 +289,12 @@
 		this.tool.appendChild(el('div', { class: 'mm-actions' }, [this.printButton]));
 
 		this.tool.appendChild(
-			el('div', { class: 'mm-tips' }, [
-				el('strong', { text: 'Before printing: ' }),
+			el('p', { class: 'mm-print-note' }, [
+				el('strong', { text: 'Tip: ' }),
 				el('span', {
 					text:
-						'In your browser print dialog set Scale to 100% (or "Actual size") and turn OFF "Fit to page". ' +
-						'Otherwise the cards will not be the right size for your binder.'
+						'in your browser print dialog set Scale to 100% (or "Actual size") and turn off "Fit to page", ' +
+						'otherwise the cards will not be the right size for your binder.'
 				})
 			])
 		);

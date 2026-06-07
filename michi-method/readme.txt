@@ -50,6 +50,35 @@ Optional shortcode attributes:
 
 `[michi_method cols="3" rows="3" card_width="63" card_height="88" mark_color="black"]`
 
+== Customizing the look ==
+
+The tool ships with a dark palette tuned to match a dark site. You can restyle
+it without editing any plugin files by overriding its CSS variables.
+
+1. In WordPress go to Appearance > Customize > Additional CSS (block themes:
+   Site Editor > Styles > Additional CSS).
+2. Paste the block below and tweak the values. Changes preview live.
+
+Example that flips the tool to a light card:
+
+`.michi-method {`
+`  --mm-bg: #ffffff;`        /* the tool's card background */
+`  --mm-text: #111827;`
+`  --mm-label: #374151;`
+`  --mm-muted: #6b7280;`
+`  --mm-surface: #ffffff;`   /* inputs, buttons */
+`  --mm-surface-alt: #f3f4f6;`
+`  --mm-dropzone-bg: #fafbfc;`
+`  --mm-border: #d8dbe0;`
+`  --mm-accent: #2563eb;`    /* highlights, primary button */
+`  --mm-radius: 8px;`
+`  --mm-font: "Inter", system-ui, sans-serif;`
+`  --mm-max-width: 760px;`
+`}`
+
+The artwork backdrop (`--mm-paper`, white) is intentionally separate so the
+preview and printed output stay correct no matter what colors you choose.
+
 == Frequently Asked Questions ==
 
 = The printed cards are the wrong size =
@@ -63,6 +92,11 @@ Nowhere. Everything is processed in the visitor's browser using the canvas
 API. No upload happens.
 
 == Changelog ==
+
+= 1.2.0 =
+* Theme the UI with CSS variables so the look can be customized from
+  Additional CSS. Default palette matches a dark site; artwork stays on a
+  white backdrop for correct previews and prints.
 
 = 1.1.0 =
 * Add spanning: merge adjacent pockets into one uncut piece, with separate

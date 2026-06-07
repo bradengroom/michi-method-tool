@@ -83,6 +83,34 @@ block prints as a single uncut tile; the seam-gap strip is printed but hides
 behind the divider so the art stays continuous across the windows. Use
 **Split** or **Clear all spans** to undo.
 
+## Customizing the look
+
+The UI is styled with CSS custom properties on `.michi-method`, so it can be
+retheme from WordPress **Appearance > Customize > Additional CSS** (block
+themes: **Site Editor > Styles > Additional CSS**) without editing plugin
+files. The shipped defaults are a dark palette tuned to match a dark site.
+
+```css
+.michi-method {
+  --mm-bg: #ffffff;        /* the tool's card background */
+  --mm-text: #111827;
+  --mm-label: #374151;
+  --mm-muted: #6b7280;
+  --mm-surface: #ffffff;   /* inputs, buttons */
+  --mm-surface-alt: #f3f4f6;
+  --mm-dropzone-bg: #fafbfc;
+  --mm-border: #d8dbe0;
+  --mm-accent: #2563eb;    /* highlights, primary button */
+  --mm-radius: 8px;        /* control corner radius */
+  --mm-radius-lg: 12px;    /* panel/card radius */
+  --mm-font: "Inter", system-ui, sans-serif;
+  --mm-max-width: 760px;
+}
+```
+
+`--mm-paper` (white) is intentionally kept separate from the chrome colors so
+the image preview and printed output stay correct regardless of theme.
+
 ## Printing tip
 
 In the browser print dialog, set **Scale to 100% / Actual size** and turn off
