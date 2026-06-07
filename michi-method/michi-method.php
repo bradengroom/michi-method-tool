@@ -3,7 +3,7 @@
  * Plugin Name:       Michi Method Printer
  * Plugin URI:        https://example.com/michi-method
  * Description:        Embed a browser-based tool that slices an image into Pokemon-card-sized tiles across a binder-slot grid and prints them at exact physical size (the "michi method"). All processing happens in the visitor's browser; no images are uploaded to the server.
- * Version:           1.0.0
+ * Version:           1.2.0
  * Requires at least: 5.8
  * Requires PHP:      7.2
  * Author:            Braden Groom
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit; // Prevent direct access.
 }
 
-define( 'MICHI_METHOD_VERSION', '1.0.0' );
+define( 'MICHI_METHOD_VERSION', '1.2.0' );
 define( 'MICHI_METHOD_FILE', __FILE__ );
 define( 'MICHI_METHOD_DIR', plugin_dir_path( __FILE__ ) );
 define( 'MICHI_METHOD_URL', plugin_dir_url( __FILE__ ) );
