@@ -1,5 +1,5 @@
 === Michi Method Printer ===
-Contributors: michimethod
+Contributors: bradengroom
 Tags: pokemon, binder, print, image, cards
 Requires at least: 5.8
 Tested up to: 6.5
