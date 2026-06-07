@@ -663,6 +663,12 @@
 				}
 			}
 		}
+		// Sort into reading order (top-to-bottom, then left-to-right) by the
+		// piece's top-left pocket, so merged spans keep their grid position
+		// instead of jumping to the front because spans are collected first.
+		list.sort(function (a, b) {
+			return a.r0 - b.r0 || a.c0 - b.c0;
+		});
 		return list;
 	};
 
