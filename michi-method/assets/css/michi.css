@@ -643,23 +643,27 @@
 	.michi-method {
 		max-width: none;
 		margin: 0;
+		padding: 0;
+		background: none;
+		border-radius: 0;
 	}
 
 	.mm-tool {
 		display: none !important;
 	}
 
+	/* Normal-flow inline-block layout so the fragmentation engine honors
+	   break-inside on each tile. (Flex + absolute positioning made browsers
+	   ignore break-inside and split/misrender tiles.) */
 	.mm-print-root {
-		display: flex !important;
-		flex-wrap: wrap;
-		align-content: flex-start;
-		gap: 0;
-		position: absolute;
-		left: 0;
-		top: 0;
+		display: block !important;
+		position: static;
+		font-size: 0; /* kill inline-block whitespace gaps between tiles */
 	}
 
 	.mm-tile {
+		display: inline-block;
+		vertical-align: top;
 		position: relative;
 		page-break-inside: avoid;
 		break-inside: avoid;

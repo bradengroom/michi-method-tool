@@ -63,7 +63,7 @@ function michi_method_render_container( $atts = array() ) {
 		'card_width'  => 63,   // mm
 		'card_height' => 88,   // mm
 		'vgap'        => 2,    // mm, seam gap added to the width (between columns)
-		'hgap'        => 0,    // mm, horizontal seam gap (between rows)
+		'hgap'        => 2,    // mm, horizontal seam gap (between rows)
 		'mark_color'  => 'black',
 		'units'       => 'mm',
 	);

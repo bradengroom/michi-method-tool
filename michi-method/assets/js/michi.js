@@ -1109,8 +1109,10 @@
 	};
 
 	/**
-	 * Exploded preview: each card is drawn as its own print tile, separated by
-	 * gaps, mirroring what actually comes out of the printer.
+	 * Per-card preview: cards are laid out on the grid with cut lines marking
+	 * each card boundary. With spanning off the cards sit edge-to-edge so the
+	 * art reads as one connected picture; with spanning on a visual gap is kept
+	 * to distinguish merged pockets and the hidden seam.
 	 */
 	MichiApp.prototype.renderExplodedPreview = function (canvas) {
 		var s = this.state;
@@ -1118,11 +1120,18 @@
 		// Lay pieces out on the actual grid: every piece keeps its column/row
 		// position, and a merged span simply fills its block (the gap between
 		// the merged cells is filled in with the continuous art).
+		//
+		// The gap between cards matches the real layout: with spanning off both
+		// gaps are 0 (vGap/hGap return 0) so the cards sit edge-to-edge and the
+		// art reads as one connected picture. With spanning on, the gaps equal
+		// the user's Pocket seam gap (vGap between columns, hGap between rows),
+		// so the preview's white gaps reflect the actual seam width.
 		var unitWmm = this.cellWmm();
 		var unitHmm = this.cellHmm();
-		var gapMm = Math.max(unitWmm, unitHmm) * 0.14;
-		var totalWmm = s.cols * unitWmm + Math.max(0, s.cols - 1) * gapMm;
-		var totalHmm = s.rows * unitHmm + Math.max(0, s.rows - 1) * gapMm;
+		var gapXmm = this.vGap();
+		var gapYmm = this.hGap();
+		var totalWmm = s.cols * unitWmm + Math.max(0, s.cols - 1) * gapXmm;
+		var totalHmm = s.rows * unitHmm + Math.max(0, s.rows - 1) * gapYmm;
 
 		var list = this.pieces();
 		var layout = list.map(function (p) {
@@ -1130,10 +1139,10 @@
 			var down = p.r1 - p.r0;
 			return {
 				p: p,
-				x: p.c0 * (unitWmm + gapMm),
-				y: p.r0 * (unitHmm + gapMm),
-				tw: (span + 1) * unitWmm + span * gapMm,
-				th: (down + 1) * unitHmm + down * gapMm
+				x: p.c0 * (unitWmm + gapXmm),
+				y: p.r0 * (unitHmm + gapYmm),
+				tw: (span + 1) * unitWmm + span * gapXmm,
+				th: (down + 1) * unitHmm + down * gapYmm
 			};
 		});
 		if (totalWmm <= 0) {
@@ -1190,12 +1199,14 @@
 			var cardX = contentX;
 			var cardY = contentY;
 
-			// Piece boundary = the cut line (outer edge only).
+			// Piece boundary = the cut line (outer edge only). Stroke on the exact
+			// integer boundary so connected cards (no gap) share one crisp divider
+			// instead of two lines 1px apart, and gapped cards stay crisp too.
 			if (showMarks) {
 				ctx.setLineDash([]);
 				ctx.lineWidth = 1;
 				ctx.strokeStyle = markColor;
-				ctx.strokeRect(cardX + 0.5, cardY + 0.5, cardWpx - 1, cardHpx - 1);
+				ctx.strokeRect(Math.round(cardX) + 0.5, Math.round(cardY) + 0.5, Math.round(cardWpx), Math.round(cardHpx));
 			}
 		}, this);
 	};
@@ -1205,7 +1216,7 @@
 	 * (from `pieces()`) which may span multiple pockets; the image is sampled
 	 * from the same full-extent placement so every piece stays aligned.
 	 */
-	MichiApp.prototype.renderPieceCanvas = function (piece) {
+	MichiApp.prototype.renderPieceCanvas = function (piece, drawMarks) {
 		var s = this.state;
 		var art = this.artSizeMm();
 
@@ -1243,21 +1254,19 @@
 			place.dH
 		);
 
-		return canvas;
-	};
+		// Burn the cut line into the raster itself for print. A CSS-border
+		// hairline (0.2mm) renders in "Save as PDF" but most physical printer
+		// drivers drop sub-0.25mm vector borders, so the line vanishes on paper.
+		// Baking it into the 300-DPI canvas makes it print exactly like the art.
+		if (drawMarks && this.marksVisible()) {
+			var lw = Math.max(2, Math.round(0.3 * PX_PER_MM)); // ~0.3mm, printer-safe
+			ctx.setLineDash([]);
+			ctx.lineWidth = lw;
+			ctx.strokeStyle = this.markColorHex();
+			ctx.strokeRect(lw / 2, lw / 2, tileWpx - lw, tileHpx - lw);
+		}
 
-	/**
-	 * Build the cut-line rectangle drawn at the card (trim) boundary so the
-	 * print page clearly shows where to cut, matching the preview.
-	 */
-	MichiApp.prototype.buildCutLine = function (color, trimWmm, trimHmm) {
-		return el('div', {
-			class: 'mm-cut-line',
-			style:
-				'left:0mm;top:0mm;' +
-				'width:' + trimWmm + 'mm;height:' + trimHmm + 'mm;' +
-				'border-color:' + color + ';'
-		});
+		return canvas;
 	};
 
 	MichiApp.prototype.print = function () {
@@ -1265,8 +1274,6 @@
 			return;
 		}
 		this.printRoot.innerHTML = '';
-
-		var markColor = this.markColorHex();
 
 		// One printed tile per piece. Spanning pieces print as a single uncut
 		// strip; the seam-gap region inside them is printed but hides behind the
@@ -1277,7 +1284,9 @@
 			var tileOuterW = piece.wMm;
 			var tileOuterH = piece.hMm;
 
-			var canvas = this.renderPieceCanvas(piece);
+			// Cut line is baked into the canvas raster (see renderPieceCanvas)
+			// so it survives physical printer drivers that drop CSS hairlines.
+			var canvas = this.renderPieceCanvas(piece, true);
 			var img = canvas; // canvas prints fine directly
 			img.className = 'mm-tile-canvas';
 			img.style.width = piece.wMm + 'mm';
@@ -1285,16 +1294,10 @@
 			img.style.left = '0mm';
 			img.style.top = '0mm';
 
-			// Cut line (outer boundary of the piece) unless marks are disabled.
-			var children = [img];
-			if (this.marksVisible()) {
-				children.push(this.buildCutLine(markColor, piece.wMm, piece.hMm));
-			}
-
 			var tile = el('div', {
 				class: 'mm-tile',
 				style: 'width:' + tileOuterW + 'mm;height:' + tileOuterH + 'mm;'
-			}, children);
+			}, [img]);
 
 			this.printRoot.appendChild(tile);
 		}
