@@ -363,6 +363,10 @@
 	color: var(--mm-accent);
 }
 
+.mm-rotate-btn .mm-icon {
+	display: block;
+}
+
 /* The dropzone is the empty state and fills the combined box. */
 .mm-preview .mm-dropzone {
 	width: 100%;

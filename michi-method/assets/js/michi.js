@@ -84,6 +84,7 @@
 			showMarks: root.getAttribute('data-mark-color') !== 'none',
 			zoom: 1, // 1 = true size; only goes below 1 (never upscales)
 			rotation: 0, // image rotation in degrees: 0, 90, 180, 270
+			flipH: false, // mirror the image left-to-right
 			offsetX: 0, // image pan within the grid, in mm (art-area coords)
 			offsetY: 0,
 			units: 'mm',
@@ -255,7 +256,20 @@
 		// Rotate controls in the opposite corner of the preview box.
 		this.rotateBar = el('div', { class: 'mm-rotate-bar' }, [
 			el('button', { type: 'button', class: 'mm-rotate-btn', text: '\u21BA', title: 'Rotate left', onClick: function () { self.rotate(-1); } }),
-			el('button', { type: 'button', class: 'mm-rotate-btn', text: '\u21BB', title: 'Rotate right', onClick: function () { self.rotate(1); } })
+			el('button', { type: 'button', class: 'mm-rotate-btn', text: '\u21BB', title: 'Rotate right', onClick: function () { self.rotate(1); } }),
+			el('button', {
+				type: 'button',
+				class: 'mm-rotate-btn',
+				title: 'Mirror (flip horizontally)',
+				html:
+					'<svg class="mm-icon" viewBox="0 0 24 24" width="20" height="20" fill="none" ' +
+					'stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+					'<line x1="12" y1="3" x2="12" y2="21" stroke-dasharray="2 2"></line>' +
+					'<path d="M9 6 L4 12 L9 18 Z"></path>' +
+					'<path d="M15 6 L20 12 L15 18 Z"></path>' +
+					'</svg>',
+				onClick: function () { self.flip(); }
+			})
 		]);
 
 		this.previewWrap = el('div', { class: 'mm-preview' }, [
@@ -503,20 +517,37 @@
 			return;
 		}
 		this.state.rotation = (this.state.rotation + dir * 90 + 360) % 360;
-		this.image = this.buildRotatedImage();
+		this.image = this.buildTransformedImage();
 		this.state.offsetX = 0;
 		this.state.offsetY = 0;
 		this.renderPreview();
 	};
 
-	/** Build a rotated copy of the source image for the current rotation. */
-	MichiApp.prototype.buildRotatedImage = function () {
+	/** Mirror the image left-to-right. */
+	MichiApp.prototype.flip = function () {
+		if (!this.sourceImage) {
+			return;
+		}
+		this.state.flipH = !this.state.flipH;
+		this.image = this.buildTransformedImage();
+		this.state.offsetX = 0;
+		this.state.offsetY = 0;
+		this.renderPreview();
+	};
+
+	/**
+	 * Build a copy of the source image with the current rotation and mirror
+	 * applied, so the rest of the pipeline (which reads width/height and draws
+	 * it) is unchanged. The mirror is applied in source space, then rotation.
+	 */
+	MichiApp.prototype.buildTransformedImage = function () {
 		var src = this.sourceImage;
 		var deg = this.state.rotation;
+		var flip = this.state.flipH;
 		if (!src) {
 			return null;
 		}
-		if (deg === 0) {
+		if (deg === 0 && !flip) {
 			return src;
 		}
 		var w = src.width;
@@ -528,6 +559,9 @@
 		var ctx = canvas.getContext('2d');
 		ctx.translate(canvas.width / 2, canvas.height / 2);
 		ctx.rotate((deg * Math.PI) / 180);
+		if (flip) {
+			ctx.scale(-1, 1);
+		}
 		ctx.drawImage(src, -w / 2, -h / 2);
 		return canvas;
 	};
@@ -571,6 +605,7 @@
 			img.onload = function () {
 				self.sourceImage = img;
 				self.state.rotation = 0;
+				self.state.flipH = false;
 				self.image = img;
 				self.state.offsetX = 0;
 				self.state.offsetY = 0;
