@@ -333,7 +333,7 @@
 					this.cardHInput
 				]),
 				'63x88mm matches a Pokemon card. 64x89mm is more snug in a TCG ' +
-					'sleeve, and 70x95mm more completely fills a VaultX binder pocket.'
+					'sleeve, and 69x94mm more completely fills a VaultX binder pocket.'
 			)
 		);
 
